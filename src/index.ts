@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { setupTools } from './tools/setupTools.js';
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
