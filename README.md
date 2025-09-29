@@ -75,13 +75,16 @@ npx cross-env DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true open-websearch
 | `USE_PROXY` | `false`                 | `true`, `false` | Enable HTTP proxy |
 | `PROXY_URL` | `http://127.0.0.1:7890` | Any valid URL | Proxy server URL |
 | `MODE` | `both`                  | `both`, `http`, `stdio` | Server mode: both HTTP+STDIO, HTTP only, or STDIO only |
-| `PORT` | `3000`                  | 1-65535 | Server port |
+| `PORT` | `3000`                  | 0-65535 | Server port (set to 0 for automatic port selection) |
 | `ALLOWED_SEARCH_ENGINES` | empty (all available) | Comma-separated engine names | Limit which search engines can be used; if the default engine is not in this list, the first allowed engine becomes the default |
 
 **Common configurations:**
 ```bash
 # Enable proxy for restricted regions
 USE_PROXY=true PROXY_URL=http://127.0.0.1:7890 npx open-websearch@latest
+
+# Use automatic port selection (OS assigns available port)
+PORT=0 npx open-websearch@latest
 
 # Full configuration
 DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true USE_PROXY=true PROXY_URL=http://127.0.0.1:7890 PORT=8080 npx open-websearch@latest
@@ -213,7 +216,7 @@ Environment variable configuration:
 | `DEFAULT_SEARCH_ENGINE` | `bing`                  | `bing`, `duckduckgo`, `exa`, `brave` | Default search engine |
 | `USE_PROXY` | `false`                 | `true`, `false` | Enable HTTP proxy |
 | `PROXY_URL` | `http://127.0.0.1:7890` | Any valid URL | Proxy server URL |
-| `PORT` | `3000`                  | 1-65535 | Server port |
+| `PORT` | `3000`                  | 0-65535 | Server port (set to 0 for automatic port selection) |
 
 Then configure in your MCP client:
 ```json

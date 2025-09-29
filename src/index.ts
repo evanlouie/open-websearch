@@ -145,10 +145,13 @@ async function main() {
     });
 
     // Read the port number from the environment variable; use the default port 3000 if it is not set.
+    // Setting PORT=0 will let the OS automatically assign an available port
     const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-    app.listen(PORT, '0.0.0.0', () => {
-      console.error(`✅ HTTP server running on port ${PORT}`)
+    const httpServer = app.listen(PORT, '0.0.0.0', () => {
+      const address = httpServer.address();
+      const actualPort = typeof address === 'object' && address !== null ? address.port : PORT;
+      console.error(`✅ HTTP server running on port ${actualPort}`)
     });
   } else {
     console.error('ℹ️ HTTP server disabled, running in STDIO mode only')
