@@ -41,7 +41,7 @@ export async function searchJuejin(query: string, limit: number): Promise<Search
 
     try {
         while (allResults.length < limit) {
-            console.log(`🔍 Searching Juejin with query: "${query}", cursor: ${cursor}`);
+            console.error(`🔍 Searching Juejin with query: "${query}", cursor: ${cursor}`);
 
             const response = await axios.get<JuejinSearchResponse>('https://api.juejin.cn/search_api/v1/search', {
                 params: {
@@ -75,7 +75,7 @@ export async function searchJuejin(query: string, limit: number): Promise<Search
             }
 
             if (!responseData.data || !Array.isArray(responseData.data)) {
-                console.log('⚠️ No more results from Juejin API');
+                console.error('⚠️ No more results from Juejin API');
                 break;
             }
 
@@ -104,14 +104,14 @@ export async function searchJuejin(query: string, limit: number): Promise<Search
 
             // 检查是否有下一页
             if (!responseData.has_more || !responseData.cursor || results.length === 0) {
-                console.log('⚠️ No more results, ending search');
+                console.error('⚠️ No more results, ending search');
                 break;
             }
 
             cursor = responseData.cursor;
         }
 
-        console.log(`✅ Juejin search completed, found ${allResults.length} results`);
+        console.error(`✅ Juejin search completed, found ${allResults.length} results`);
         return allResults.slice(0, limit);
 
     } catch (error) {

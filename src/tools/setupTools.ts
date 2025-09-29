@@ -46,7 +46,7 @@ const distributeLimit = (totalLimit: number, engineCount: number): number[] => {
 const executeSearch = async (query: string, engines: string[], limit: number): Promise<SearchResult[]> => {
     // Clean up the query string to ensure it won't cause issues due to spaces or special characters
     const cleanQuery = query.trim();
-    console.log(`[DEBUG] Executing search, query: "${cleanQuery}", engines: ${engines.join(', ')}, limit: ${limit}`);
+    console.error(`[DEBUG] Executing search, query: "${cleanQuery}", engines: ${engines.join(', ')}, limit: ${limit}`);
 
     if (!cleanQuery) {
         console.error('Query string is empty');
@@ -61,7 +61,7 @@ const executeSearch = async (query: string, engines: string[], limit: number): P
         const searchFn = engineMap[engine as SupportedEngine];
 
         if (!searchFn) {
-            console.warn(`Unsupported search engine: ${engine}`);
+            console.error(`Unsupported search engine: ${engine}`);
             return Promise.resolve([]);
         }
 
@@ -180,7 +180,7 @@ export const setupTools = (server: McpServer): void => {
         },
         async ({query, limit = 10, engines = ['bing']}) => {
             try {
-                console.log(`Searching for "${query}" using engines: ${engines.join(', ')}`);
+                console.error(`Searching for "${query}" using engines: ${engines.join(', ')}`);
 
                 const results = await executeSearch(query.trim(), engines, limit);
 
@@ -220,7 +220,7 @@ export const setupTools = (server: McpServer): void => {
         },
         async ({url}) => {
             try {
-                console.log(`Fetching Linux.do article: ${url}`);
+                console.error(`Fetching Linux.do article: ${url}`);
                 const result = await fetchLinuxDoArticle(url);
 
                 return {
@@ -254,7 +254,7 @@ export const setupTools = (server: McpServer): void => {
         },
         async ({url}) => {
             try {
-                console.log(`Fetching CSDN article: ${url}`);
+                console.error(`Fetching CSDN article: ${url}`);
                 const result = await fetchCsdnArticle(url);
 
                 return {
@@ -288,7 +288,7 @@ export const setupTools = (server: McpServer): void => {
         },
         async ({url}) => {
             try {
-                console.log(`Fetching GitHub README: ${url}`);
+                console.error(`Fetching GitHub README: ${url}`);
                 const result = await fetchGithubReadme(url);
 
                 if (result) {
@@ -332,7 +332,7 @@ export const setupTools = (server: McpServer): void => {
         },
         async ({url}) => {
             try {
-                console.log(`Fetching Juejin article: ${url}`);
+                console.error(`Fetching Juejin article: ${url}`);
                 const result = await fetchJuejinArticle(url);
 
                 return {

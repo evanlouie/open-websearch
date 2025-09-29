@@ -24,7 +24,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
       return results;
     }
   } catch (error) {
-    console.warn('预加载URL方法失败，尝试HTML方法:', error);
+    console.error('预加载URL方法失败，尝试HTML方法:', error);
   }
 
   return await searchDuckDuckGoHtml(query, limit, effectiveProxyUrl);
@@ -100,7 +100,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
       }
 
       if (!basePreloadUrl) {
-        console.warn('无法找到预加载的d.js URL');
+        console.error('无法找到预加载的d.js URL');
         return [];
       }
 
@@ -181,7 +181,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
             offset += validResultsInCurrentPage;
 
           } catch (error) {
-            console.warn('解析JSONP数据失败:', error);
+            console.error('解析JSONP数据失败:', error);
             hasMoreResults = false;
           }
         } else {

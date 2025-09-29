@@ -35,7 +35,7 @@ function extractOwnerAndRepo(url: string): { owner: string; repo: string } | nul
 
         return null;
     } catch (error) {
-        console.warn('Failed to parse GitHub URL:', url, error);
+        console.error('Failed to parse GitHub URL:', url, error);
         return null;
     }
 }
@@ -54,7 +54,7 @@ async function fetchReadme(owner: string, repo: string): Promise<string | null> 
 
     try {
         const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/readme`;
-        console.log(`Fetching README from: ${apiUrl}`);
+        console.error(`Fetching README from: ${apiUrl}`);
 
         const response = await axios.get(apiUrl, {
             headers: {
@@ -68,12 +68,12 @@ async function fetchReadme(owner: string, repo: string): Promise<string | null> 
         if (typeof response.data === 'string' && response.data.trim()) {
             return response.data;
         } else {
-            console.warn(`Empty or invalid README content for ${owner}/${repo}`);
+            console.error(`Empty or invalid README content for ${owner}/${repo}`);
             return null;
         }
     } catch (error: any) {
         if (error.response?.status === 404) {
-            console.warn(`README not found for ${owner}/${repo}`);
+            console.error(`README not found for ${owner}/${repo}`);
         } else if (error.code === 'ECONNABORTED') {
             console.error(`Timeout fetching README for ${owner}/${repo}`);
         } else {
@@ -89,7 +89,7 @@ async function fetchReadme(owner: string, repo: string): Promise<string | null> 
  * @returns README content or null if failed
  */
 async function getReadmeFromUrl(githubUrl: string): Promise<string | null> {
-    console.log(`\n--- Processing URL: ${githubUrl} ---`);
+    console.error(`\n--- Processing URL: ${githubUrl} ---`);
 
     if (!githubUrl?.trim()) {
         console.error('Invalid URL provided');
@@ -103,15 +103,15 @@ async function getReadmeFromUrl(githubUrl: string): Promise<string | null> {
         return null;
     }
 
-    console.log(`✅ Extraction successful: ${repoInfo.owner}/${repoInfo.repo}`);
+    console.error(`✅ Extraction successful: ${repoInfo.owner}/${repoInfo.repo}`);
 
     const content = await fetchReadme(repoInfo.owner, repoInfo.repo);
 
     if (content) {
-        console.log(`✅ README fetched successfully (${content.length} characters)`);
+        console.error(`✅ README fetched successfully (${content.length} characters)`);
         return content;
     } else {
-        console.warn(`❌ Failed to fetch README for ${repoInfo.owner}/${repoInfo.repo}`);
+        console.error(`❌ Failed to fetch README for ${repoInfo.owner}/${repoInfo.repo}`);
         return null;
     }
 }

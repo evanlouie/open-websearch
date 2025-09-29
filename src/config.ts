@@ -38,7 +38,7 @@ const validSearchEngines = ['bing', 'duckduckgo', 'exa', 'brave', 'baidu', 'csdn
 
 // Validate default search engine
 if (!validSearchEngines.includes(config.defaultSearchEngine)) {
-    console.warn(`Invalid DEFAULT_SEARCH_ENGINE: "${config.defaultSearchEngine}", falling back to "bing"`);
+    console.error(`Invalid DEFAULT_SEARCH_ENGINE: "${config.defaultSearchEngine}", falling back to "bing"`);
     config.defaultSearchEngine = 'bing';
 }
 
@@ -47,46 +47,46 @@ if (config.allowedSearchEngines.length > 0) {
     // Filter out invalid engines
     const invalidEngines = config.allowedSearchEngines.filter(engine => !validSearchEngines.includes(engine));
     if (invalidEngines.length > 0) {
-        console.warn(`Invalid search engines detected and will be ignored: ${invalidEngines.join(', ')}`);
+        console.error(`Invalid search engines detected and will be ignored: ${invalidEngines.join(', ')}`);
     }
     config.allowedSearchEngines = config.allowedSearchEngines.filter(engine => validSearchEngines.includes(engine));
 
     // If all engines were invalid, don't restrict (allow all engines)
     if (config.allowedSearchEngines.length === 0) {
-        console.warn(`No valid search engines specified in the allowed list, all engines will be available`);
+        console.error(`No valid search engines specified in the allowed list, all engines will be available`);
     }
     // Check if default engine is in the allowed list
     else if (!config.allowedSearchEngines.includes(config.defaultSearchEngine)) {
-        console.warn(`Default search engine "${config.defaultSearchEngine}" is not in the allowed engines list`);
+        console.error(`Default search engine "${config.defaultSearchEngine}" is not in the allowed engines list`);
         // Update the default engine to the first allowed engine
         config.defaultSearchEngine = config.allowedSearchEngines[0] as AppConfig['defaultSearchEngine'];
-        console.log(`Default search engine updated to "${config.defaultSearchEngine}"`);
+        console.error(`Default search engine updated to "${config.defaultSearchEngine}"`);
     }
 }
 
 // Log configuration
-console.log(`🔍 Default search engine: ${config.defaultSearchEngine}`);
+console.error(`🔍 Default search engine: ${config.defaultSearchEngine}`);
 if (config.allowedSearchEngines.length > 0) {
-    console.log(`🔍 Allowed search engines: ${config.allowedSearchEngines.join(', ')}`);
+    console.error(`🔍 Allowed search engines: ${config.allowedSearchEngines.join(', ')}`);
 } else {
-    console.log(`🔍 No search engine restrictions, all available engines can be used`);
+    console.error(`🔍 No search engine restrictions, all available engines can be used`);
 }
 
 if (config.useProxy) {
-    console.log(`🌐 Using proxy: ${config.proxyUrl}`);
+    console.error(`🌐 Using proxy: ${config.proxyUrl}`);
 } else {
-    console.log(`🌐 No proxy configured (set USE_PROXY=true to enable)`);
+    console.error(`🌐 No proxy configured (set USE_PROXY=true to enable)`);
 }
 
 // Determine server mode from config
 const mode = process.env.MODE || (config.enableHttpServer ? 'both' : 'stdio');
-console.log(`🖥️ Server mode: ${mode.toUpperCase()}`);
+console.error(`🖥️ Server mode: ${mode.toUpperCase()}`);
 
 if (config.enableHttpServer) {
     if (config.enableCors) {
-        console.log(`🔒 CORS enabled with origin: ${config.corsOrigin}`);
+        console.error(`🔒 CORS enabled with origin: ${config.corsOrigin}`);
     } else {
-        console.log(`🔒 CORS disabled (set ENABLE_CORS=true to enable)`);
+        console.error(`🔒 CORS disabled (set ENABLE_CORS=true to enable)`);
     }
 }
 
