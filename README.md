@@ -2,12 +2,15 @@
 
 # Open-WebSearch MCP Server
 
+> **Note:** This is a fork of the original [Aas-ee/open-webSearch](https://github.com/Aas-ee/open-webSearch) project.
+> NPX installation does not work for this fork. Please use the Bunx installation method below.
+
 [![ModelScope](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Aas-ee/3af09e0f4c7821fb2e9acb96483a5ff0/raw/badge.json&color=%23de5a16)](https://www.modelscope.cn/mcp/servers/Aasee1/open-webSearch)
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/Aas-ee/open-webSearch)](https://archestra.ai/mcp-catalog/aas-ee__open-websearch)
 [![smithery badge](https://smithery.ai/badge/@Aas-ee/open-websearch)](https://smithery.ai/server/@Aas-ee/open-websearch)
-![Version](https://img.shields.io/github/v/release/Aas-ee/open-websearch)
-![License](https://img.shields.io/github/license/Aas-ee/open-websearch)
-![Issues](https://img.shields.io/github/issues/Aas-ee/open-websearch)
+![Version](https://img.shields.io/github/v/release/evanlouie/open-websearch)
+![License](https://img.shields.io/github/license/evanlouie/open-websearch)
+![Issues](https://img.shields.io/github/issues/evanlouie/open-websearch)
 
 **[🇨🇳 中文](./README-zh.md) | 🇺🇸 English**
 
@@ -43,27 +46,29 @@ A Model Context Protocol (MCP) server based on multi-engine search results, supp
 
 ## Installation Guide
 
-### NPX Quick Start (Recommended)
+### Bunx Quick Start (Recommended)
 
-The fastest way to get started:
+The fastest way to get started with this fork:
 
 ```bash
 # Basic usage
-npx open-websearch@latest
+bunx github:evanlouie/open-websearch
 
 # With environment variables (Linux/macOS)
-DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true npx open-websearch@latest
+DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx github:evanlouie/open-websearch
 
 # Windows PowerShell
-$env:DEFAULT_SEARCH_ENGINE="duckduckgo"; $env:ENABLE_CORS="true"; npx open-websearch@latest
+$env:DEFAULT_SEARCH_ENGINE="duckduckgo"; $env:ENABLE_CORS="true"; bunx github:evanlouie/open-websearch
 
 # Windows CMD
-set MODE=stdio && set DEFAULT_SEARCH_ENGINE=duckduckgo && npx open-websearch@latest
+set MODE=stdio && set DEFAULT_SEARCH_ENGINE=duckduckgo && bunx github:evanlouie/open-websearch
 
 # Cross-platform (requires cross-env, Used for local development)
-npm install -g open-websearch
-npx cross-env DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true open-websearch
+npx cross-env DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx github:evanlouie/open-websearch
 ```
+
+> **Note:** NPX installation (`npx open-websearch@latest`) does not work for this fork as it's not published to npm.
+> Use `bunx github:evanlouie/open-websearch` to run directly from GitHub, or clone the repository for local installation.
 
 **Environment Variables:**
 
@@ -81,13 +86,13 @@ npx cross-env DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true open-websearch
 **Common configurations:**
 ```bash
 # Enable proxy for restricted regions
-USE_PROXY=true PROXY_URL=http://127.0.0.1:7890 npx open-websearch@latest
+USE_PROXY=true PROXY_URL=http://127.0.0.1:7890 bunx github:evanlouie/open-websearch
 
 # Use automatic port selection (OS assigns available port)
-PORT=0 npx open-websearch@latest
+PORT=0 bunx github:evanlouie/open-websearch
 
 # Full configuration
-DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true USE_PROXY=true PROXY_URL=http://127.0.0.1:7890 PORT=8080 npx open-websearch@latest
+DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true USE_PROXY=true PROXY_URL=http://127.0.0.1:7890 PORT=8080 bunx github:evanlouie/open-websearch
 ```
 
 ### Local Installation
@@ -158,15 +163,15 @@ npm run build
 }
 ```
 
-**NPX Command Line Configuration:**
+**Bunx Command Line Configuration:**
 ```json
 {
   "mcpServers": {
     "web-search": {
       "args": [
-        "open-websearch@latest"
+        "github:evanlouie/open-websearch"
       ],
-      "command": "npx",
+      "command": "bunx",
       "env": {
         "MODE": "stdio",
         "DEFAULT_SEARCH_ENGINE": "duckduckgo",
@@ -176,6 +181,8 @@ npm run build
   }
 }
 ```
+
+> **Note:** NPX does not work for this fork. Use `bunx` with the GitHub repository path as shown above.
 
 **Local STDIO Configuration for Cherry Studio (Windows):**
 ```json
@@ -196,15 +203,22 @@ npm run build
 
 ### Docker Deployment
 
-Quick deployment using Docker Compose:
+> **Note:** Pre-built Docker images are not available for this fork. You can build locally using the Dockerfile in this repository.
+
+Build and run locally:
+
+```bash
+# Build the Docker image
+docker build -t open-websearch .
+
+# Run the container
+docker run -d --name web-search -p 3000:3000 -e ENABLE_CORS=true -e CORS_ORIGIN=* open-websearch
+```
+
+Or use Docker Compose:
 
 ```bash
 docker-compose up -d
-```
-
-Or use Docker directly:
-```bash
-docker run -d --name web-search -p 3000:3000 -e ENABLE_CORS=true -e CORS_ORIGIN=* ghcr.io/aas-ee/open-web-search:latest
 ```
 
 Environment variable configuration:
@@ -358,7 +372,7 @@ use_mcp_tool({
   server_name: "web-search",
   tool_name: "fetchGithubReadme",
   arguments: {
-    url: "https://github.com/Aas-ee/open-webSearch"
+    url: "https://github.com/evanlouie/open-websearch"
   }
 })
 ```
@@ -477,7 +491,7 @@ The repository includes a GitHub Actions workflow (`.github/workflows/docker.yml
     - Alibaba Cloud Container Registry - only enabled when ACR secrets are configured
 
 3. **Image Tags**:
-    - `ghcr.io/your-username/open-web-search:latest`
+    - `ghcr.io/evanlouie/open-websearch:latest`
     - `your-acr-address/your-image-name:latest` (if ACR is configured)
 
 #### Fork and Publish Steps:
@@ -490,7 +504,7 @@ The repository includes a GitHub Actions workflow (`.github/workflows/docker.yml
 4. **GitHub Actions will automatically build and push** your Docker image
 5. **Use your image**, update the Docker command:
    ```bash
-   docker run -d --name web-search -p 3000:3000 -e ENABLE_CORS=true -e CORS_ORIGIN=* ghcr.io/your-username/open-web-search:latest
+   docker run -d --name web-search -p 3000:3000 -e ENABLE_CORS=true -e CORS_ORIGIN=* ghcr.io/evanlouie/open-websearch:latest
    ```
 
 #### Notes:
@@ -503,6 +517,6 @@ The repository includes a GitHub Actions workflow (`.github/workflows/docker.yml
 ## Star History
 If you find this project helpful, please consider giving it a ⭐ Star!
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Aas-ee/open-webSearch&type=Date)](https://www.star-history.com/#Aas-ee/open-webSearch&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=evanlouie/open-websearch&type=Date)](https://www.star-history.com/#evanlouie/open-websearch&Date)
 
 </div>
