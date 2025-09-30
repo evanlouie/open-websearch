@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import * as cheerio from 'cheerio';
 import { SearchResult } from '../../types.js';
 import {getProxyUrl} from "../../config.js";
@@ -11,7 +11,7 @@ export async function searchBrave(query: string, limit: number): Promise<SearchR
     const effectiveProxyUrl = getProxyUrl();
 
     // Configure request options
-    const requestOptions: any = {
+    const requestOptions: AxiosRequestConfig = {
         headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
             "Connection": "keep-alive",

@@ -25,6 +25,12 @@ bun dev
 
 # Run MCP inspector for testing
 bun inspector
+
+# Type checking (TypeScript strict mode)
+bun run typecheck
+
+# Run tests
+bun test
 ```
 
 ### Testing Different Modes
@@ -69,11 +75,11 @@ The server supports three operational modes via the `MODE` environment variable:
 - **`stdio`**: STDIO transport only (for direct process communication)
 
 ### Entry Point
-- **`src/index.ts`**: Main server initialization
-  - Sets up MCP server instance
-  - Configures transport layer(s) based on MODE
-  - Initializes Express HTTP server (if enabled)
-  - Manages transport session lifecycle
+- **`src/index.ts`**: Main server initialization (thin entry point)
+  - Creates MCP server using `createMcpServer()` from server.ts
+  - Configures STDIO transport if enabled
+  - Creates HTTP server using `createHttpServer()` if enabled
+  - Manages server startup based on MODE environment variable
 
 ### Configuration System
 - **`src/config.ts`**: Centralized configuration via environment variables
@@ -119,11 +125,23 @@ Search engines use web scraping to extract structured data:
   - `SearchResult`: Standard search result format with title, url, description, source, engine
 
 ### HTTP Server Architecture
-When HTTP mode is enabled (`src/index.ts:35-153`):
+HTTP server implementation is split across:
+- **`src/server.ts`**: Server creation and configuration (exported for testing)
+  - `createMcpServer()`: Creates and configures MCP server with tools
+  - `createHttpServer()`: Creates HTTP server with transport handlers
+  - Helper functions: `parseBody()`, `addCorsHeaders()`
+- **`src/index.ts`**: Main entry point that uses server.ts exports
+
+When HTTP mode is enabled:
+- Uses Node.js `http.createServer()` from `node:http` module
+  - Fully compatible with Bun runtime (Bun implements node:http natively)
+  - No Express dependency - uses native Node.js HTTP APIs
+  - Better performance and smaller dependency footprint
 - **StreamableHTTP transport** (`/mcp` endpoint): Modern MCP protocol with session management
 - **SSE transport** (`/sse` and `/messages` endpoints): Legacy support for older MCP clients
 - Session management tracks transports by session ID
-- CORS configuration for cross-origin requests
+- Manual CORS handling (no cors middleware needed)
+- All MCP SDK transports receive native `IncomingMessage`/`ServerResponse` objects
 
 ## Adding a New Search Engine
 
@@ -150,11 +168,43 @@ When HTTP mode is enabled (`src/index.ts:35-153`):
 
 ## Testing
 
-Manual testing is done by running individual engine test files in `src/test/`:
+### Integration Tests
+The project includes comprehensive integration tests in `src/__tests__/`:
+- HTTP server tests covering all endpoints and modes
+- CORS functionality tests
+- Session management tests
+- Error handling tests
+
+Run tests with:
+```bash
+bun test
+```
+
+### Manual Engine Tests
+Manual testing can be done by running individual engine test files in `src/test/`:
 - `test-bing.ts`, `test-baidu.ts`, `test-duckduckgo.ts`, etc.
 - `fetchCsdnArticleTests.ts`, `fetchJuejinArticleTests.ts`
 
 These are standalone test scripts that directly import and test engine functions.
+
+### Development Workflow
+**IMPORTANT:** After making any code changes:
+1. Run `bun run typecheck` to ensure TypeScript strict mode compliance
+2. Run `bun test` to verify all tests pass
+3. Test the affected functionality manually if needed
+
+The project MUST maintain:
+- ✅ Zero TypeScript errors in strict mode (`strict: true` in tsconfig.json)
+- ✅ Zero `any` types in source code (use `unknown`, proper interfaces, or type guards)
+- ✅ Zero TypeScript suppressions (`@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`)
+- ✅ All integration tests passing (16+ tests covering HTTP endpoints, CORS, sessions, errors)
+
+**Type Safety Guidelines:**
+- Use `AxiosRequestConfig` for axios request options instead of `any`
+- Use `unknown` for JSON parsing results, not `any`
+- Use `error instanceof Error` checks in catch blocks
+- Define interfaces for external API responses (e.g., `DuckDuckGoSearchItem`)
+- Use type guards (`axios.isAxiosError()`) for error handling
 
 ## Important Notes
 

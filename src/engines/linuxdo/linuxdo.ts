@@ -89,8 +89,9 @@ async function searchBingForLinuxDo(query: string, limit: number): Promise<Searc
         }
 
         return allResults.slice(0, limit);
-    } catch (error: any) {
-        console.error('❌ Bing search failed:', error.message || error);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Bing search failed:', errorMessage);
         return [];
     }
 }
@@ -131,8 +132,9 @@ export async function searchLinuxDo(query: string, limit: number): Promise<Searc
         });
 
         return filteredResults.slice(0, limit);
-    } catch (error: any) {
-        console.error(`❌ Linux.do search failed using ${config.defaultSearchEngine}:`, error.message || error);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`❌ Linux.do search failed using ${config.defaultSearchEngine}:`, errorMessage);
         return [];
     }
 

@@ -71,13 +71,19 @@ async function fetchReadme(owner: string, repo: string): Promise<string | null> 
             console.error(`Empty or invalid README content for ${owner}/${repo}`);
             return null;
         }
-    } catch (error: any) {
-        if (error.response?.status === 404) {
-            console.error(`README not found for ${owner}/${repo}`);
-        } else if (error.code === 'ECONNABORTED') {
-            console.error(`Timeout fetching README for ${owner}/${repo}`);
-        } else {
+    } catch (error) {
+        if (axios.isAxiosError(error)) {
+            if (error.response?.status === 404) {
+                console.error(`README not found for ${owner}/${repo}`);
+            } else if (error.code === 'ECONNABORTED') {
+                console.error(`Timeout fetching README for ${owner}/${repo}`);
+            } else {
+                console.error(`Failed to fetch README for ${owner}/${repo}:`, error.message);
+            }
+        } else if (error instanceof Error) {
             console.error(`Failed to fetch README for ${owner}/${repo}:`, error.message);
+        } else {
+            console.error(`Failed to fetch README for ${owner}/${repo}:`, String(error));
         }
         return null;
     }

@@ -1,9 +1,17 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import * as cheerio from 'cheerio';
 import {HttpsProxyAgent} from 'https-proxy-agent';
 import {SearchResult} from "../../types.js";
 import {getProxyUrl} from "../../config.js";
 
+interface DuckDuckGoSearchItem {
+  t?: string;  // title
+  u?: string;  // url
+  a?: string;  // description/abstract
+  i?: string;  // icon/image
+  sn?: string; // source name
+  n?: boolean; // navigation item flag
+}
 
 /**
  * Search DuckDuckGo and return results
@@ -39,7 +47,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
 
     try {
       // Configure request options
-      const requestOptions: any = {
+      const requestOptions: AxiosRequestConfig = {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
           "Connection": "keep-alive",
@@ -153,7 +161,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
             let validResultsInCurrentPage = 0;
 
             // Process search results
-            jsonData.forEach((item: any) => {
+            jsonData.forEach((item: DuckDuckGoSearchItem) => {
               // Exclude navigation items
               if (item.n) return;
 
@@ -203,7 +211,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
   let offset = 0;
 
     // Configure request options
-    const requestOptions: any = {
+    const requestOptions: AxiosRequestConfig = {
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': 'Apifox/1.0.0 (https://apifox.com)',

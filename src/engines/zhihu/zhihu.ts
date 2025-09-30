@@ -88,8 +88,9 @@ async function searchBingForZhiHu(query: string, limit: number): Promise<SearchR
         }
 
         return allResults.slice(0, limit);
-    } catch (error: any) {
-        console.error('❌ Bing search failed:', error.message || error);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Bing search failed:', errorMessage);
         return [];
     }
 }
@@ -130,8 +131,9 @@ export async function searchZhiHu(query: string, limit: number): Promise<SearchR
         });
 
         return filteredResults.slice(0, limit);
-    } catch (error: any) {
-        console.error(`❌ zhuanlan.zhihu.com search failed using ${config.defaultSearchEngine}:`, error.message || error);
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`❌ zhuanlan.zhihu.com search failed using ${config.defaultSearchEngine}:`, errorMessage);
         return [];
     }
 

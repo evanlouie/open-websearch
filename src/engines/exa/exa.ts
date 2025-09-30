@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 import { SearchResult } from '../../types.js';
 import { getProxyUrl } from "../../config.js";
 import { HttpsProxyAgent } from "https-proxy-agent";
@@ -15,7 +15,7 @@ export async function searchExa(query: string, limit: number): Promise<SearchRes
     const effectiveProxyUrl = getProxyUrl();
 
     // Configure request options, no changes needed here
-    const requestOptions: any = {
+    const requestOptions: AxiosRequestConfig = {
         headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
             "Connection": "keep-alive",
@@ -82,8 +82,11 @@ export async function searchExa(query: string, limit: number): Promise<SearchRes
         return allResults.slice(0, limit);
 
     } catch (error) {
-        // @ts-ignore
-        console.error('❌ Error fetching search results from Exa.ai:', error.message);
+        if (error instanceof Error) {
+            console.error('❌ Error fetching search results from Exa.ai:', error.message);
+        } else {
+            console.error('❌ Error fetching search results from Exa.ai:', error);
+        }
         if (axios.isAxiosError(error) && error.response) {
             console.error('API Error Response:', error.response.data);
         }

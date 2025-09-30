@@ -15,7 +15,7 @@
 
 </div>
 
-A Model Context Protocol (MCP) server based on multi-engine search results, supporting free web search without API keys.
+A Model Context Protocol (MCP) server based on multi-engine search results, supporting free web search without API keys. Built with Bun runtime and TypeScript, featuring comprehensive integration tests and strict type safety.
 
 ## Features
 
@@ -36,6 +36,10 @@ A Model Context Protocol (MCP) server based on multi-engine search results, supp
 - Support for fetching individual article content
     - csdn
     - github (README files)
+    - juejin
+- TypeScript strict mode with comprehensive type safety
+- Integration test suite with 16+ tests
+- Multiple transport modes (HTTP, STDIO, or both)
 
 ## TODO
 - Support for ~~Bing~~ (already supported), ~~DuckDuckGo~~ (already supported), ~~Exa~~ (already supported), ~~Brave~~ (already supported), Google and other search engines
@@ -458,6 +462,46 @@ Since this tool works by scraping multi-engine search results, please note the f
 ## Contributing
 
 Welcome to submit issue reports and feature improvement suggestions!
+
+### Development
+
+This project uses Bun runtime and TypeScript with strict mode enabled.
+
+**Development Commands:**
+```bash
+# Install dependencies
+bun install
+
+# Run the server locally
+bun start
+
+# Run tests
+bun test
+
+# Type checking (must pass with zero errors)
+bun run typecheck
+
+# Run MCP inspector for testing
+bun inspector
+```
+
+**Development Requirements:**
+- ✅ All code must pass TypeScript strict mode (`bun run typecheck`)
+- ✅ All integration tests must pass (`bun test`)
+- ✅ No `any` types in source code
+- ✅ No TypeScript suppressions (`@ts-ignore`, etc.)
+
+**Testing:**
+- Integration tests are located in `src/__tests__/`
+- Tests cover HTTP server endpoints, CORS, session management, and error handling
+- Run `bun test` before submitting pull requests
+
+**Architecture:**
+- `src/index.ts` - Main entry point
+- `src/server.ts` - HTTP server and MCP server creation (exported for testing)
+- `src/config.ts` - Configuration management
+- `src/engines/` - Search engine implementations
+- `src/tools/` - MCP tool definitions
 
 ### Contributor Guide
 
