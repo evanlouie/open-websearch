@@ -83,13 +83,13 @@ export async function searchJuejin(query: string, limit: number): Promise<Search
                 const { result_model, title_highlight, content_highlight } = item;
                 const { article_info, author_user_info, category, tags } = result_model;
 
-                // 移除HTML标签的高亮标记
+                // Remove HTML tag highlight markers
                 const cleanTitle = title_highlight.replace(/<\/?em>/g, '');
                 const cleanContent = content_highlight.replace(/<\/?em>/g, '');
 
-                // 构建描述信息
+                // Build description info
                 const tagNames = tags.map(tag => tag.tag_name).join(', ');
-                const description = `${cleanContent} | 分类: ${category.category_name} | 标签: ${tagNames} | 👍 ${article_info.digg_count} | 👀 ${article_info.view_count}`;
+                const description = `${cleanContent} | Category: ${category.category_name} | Tags: ${tagNames} | 👍 ${article_info.digg_count} | 👀 ${article_info.view_count}`;
 
                 return {
                     title: cleanTitle,
@@ -102,7 +102,7 @@ export async function searchJuejin(query: string, limit: number): Promise<Search
 
             allResults = allResults.concat(results);
 
-            // 检查是否有下一页
+            // Check if there is a next page
             if (!responseData.has_more || !responseData.cursor || results.length === 0) {
                 console.error('⚠️ No more results, ending search');
                 break;

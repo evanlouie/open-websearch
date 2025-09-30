@@ -27,7 +27,7 @@ export async function fetchJuejinArticle(url: string): Promise<{ content: string
 
         const $ = cheerio.load(response.data);
 
-        // 掘金文章内容的可能选择器（按优先级排序）
+        // Possible selectors for Juejin article content (sorted by priority)
         const selectors = [
             '.markdown-body',
             '.article-content',
@@ -41,23 +41,23 @@ export async function fetchJuejinArticle(url: string): Promise<{ content: string
 
         let content = '';
 
-        // 尝试多个选择器
+        // Try multiple selectors
         for (const selector of selectors) {
             console.error(`🔍 Trying selector: ${selector}`);
             const element = $(selector);
             if (element.length > 0) {
                 console.error(`✅ Found content with selector: ${selector}`);
-                // 移除脚本和样式标签
+                // Remove script and style tags
                 element.find('script, style, .code-block-extension, .hljs-ln-numbers').remove();
                 content = element.text().trim();
 
-                if (content.length > 100) { // 确保内容足够长
+                if (content.length > 100) { // Ensure content is long enough
                     break;
                 }
             }
         }
 
-        // 如果所有选择器都失败，尝试提取页面主要文本内容
+        // If all selectors fail, try to extract main text content from page
         if (!content || content.length < 100) {
             console.error('⚠️ All selectors failed, trying fallback extraction');
             $('script, style, nav, header, footer, .sidebar, .comment').remove();
@@ -68,7 +68,7 @@ export async function fetchJuejinArticle(url: string): Promise<{ content: string
         return { content };
 
     } catch (error) {
-        console.error('❌ 获取掘金文章失败:', error);
-        throw new Error(`获取掘金文章失败: ${error instanceof Error ? error.message : '未知错误'}`);
+        console.error('❌ Failed to fetch Juejin article:', error);
+        throw new Error(`Failed to fetch Juejin article: ${error instanceof Error ? error.message : 'unknown error'}`);
     }
 }

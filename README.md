@@ -12,7 +12,6 @@
 ![License](https://img.shields.io/github/license/evanlouie/open-websearch)
 ![Issues](https://img.shields.io/github/issues/evanlouie/open-websearch)
 
-**[🇨🇳 中文](./README-zh.md) | 🇺🇸 English**
 
 </div>
 
@@ -63,8 +62,8 @@ $env:DEFAULT_SEARCH_ENGINE="duckduckgo"; $env:ENABLE_CORS="true"; bunx github:ev
 # Windows CMD
 set MODE=stdio && set DEFAULT_SEARCH_ENGINE=duckduckgo && bunx github:evanlouie/open-websearch
 
-# Cross-platform (requires cross-env, Used for local development)
-npx cross-env DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx github:evanlouie/open-websearch
+# Cross-platform environment variables
+DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx github:evanlouie/open-websearch
 ```
 
 > **Note:** NPX installation (`npx open-websearch@latest`) does not work for this fork as it's not published to npm.
@@ -100,11 +99,11 @@ DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true USE_PROXY=true PROXY_URL=http:
 1. Clone or download this repository
 2. Install dependencies:
 ```bash
-npm install
+bun install
 ```
-3. Build the server:
+3. Run the server:
 ```bash
-npm run build
+bun start
 ```
 4. Add the server to your MCP configuration:
 
@@ -189,8 +188,8 @@ npm run build
 {
   "mcpServers": {
     "open-websearch-local": {
-      "command": "node",
-      "args": ["C:/path/to/your/project/build/index.js"],
+      "command": "bun",
+      "args": ["C:/path/to/your/project/src/index.ts"],
       "env": {
         "MODE": "stdio",
         "DEFAULT_SEARCH_ENGINE": "duckduckgo",

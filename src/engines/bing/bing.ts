@@ -68,5 +68,5 @@ export async function searchBing(query: string, limit: number): Promise<SearchRe
         pn += 1;
     }
 
-    return allResults.slice(0, limit); // 截取最多 limit 个
+    return allResults.slice(0, limit); // Take at most limit results
 }

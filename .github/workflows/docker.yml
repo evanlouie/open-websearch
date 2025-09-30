@@ -1,5 +1,5 @@
 name: Build and Push to GHCR & ACR
-# 此工作流仅在推送标签 (v*) 时触发，用于构建和推送 Docker 镜像
+# This workflow triggers only when pushing tags (v*), for building and pushing Docker images
 
 on:
   push:
@@ -15,15 +15,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # 设置 Docker Buildx（支持多架构构建）
+      # Set up Docker Buildx (supports multi-architecture builds)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 设置 QEMU（用于模拟不同架构）
+      # Set up QEMU (for emulating different architectures)
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      # 检查 ACR 是否启用
+      # Check if ACR is enabled
       - name: Check if ACR registry is set
         id: check-acr
         run: |
@@ -33,7 +33,7 @@ jobs:
             echo "acr_enabled=false" >> $GITHUB_OUTPUT
           fi
 
-      # 登录 ACR（仅在启用时）
+      # Log in to ACR (only when enabled)
       - name: Log in to Aliyun ACR
         if: steps.check-acr.outputs.acr_enabled == 'true'
         uses: docker/login-action@v3
@@ -42,7 +42,7 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      # 登录 GitHub Container Registry
+      # Log in to GitHub Container Registry
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -50,12 +50,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 获取仓库所有者小写形式
+      # Get lowercase repository owner
       - name: Get lowercase repository owner
         id: lowercase
         run: echo "repository_owner_lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
-      # 准备镜像 tag（包括 latest 和版本 tag）
+      # Prepare image tags (includes latest and version tag)
       - name: Prepare tags
         id: tags
         run: |
@@ -68,17 +68,17 @@ jobs:
             TAGS="${TAGS},${ACR_REPO}:latest,${ACR_REPO}:${VERSION_TAG}"
           fi
 
-          # 输出 tags 结果
+          # Output tags result
           echo "tags<<EOF" >> $GITHUB_OUTPUT
           echo "$TAGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # 构建并推送多架构镜像
+      # Build and push multi-architecture image
       - name: Build and Push Multi-Platform Docker Image
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64  # 🎯 这里添加了多平台支持
+          platforms: linux/amd64,linux/arm64  # Multi-platform support
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha

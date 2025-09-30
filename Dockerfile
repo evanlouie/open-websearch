@@ -1,33 +1,33 @@
-# 使用官方 Bun 基础镜像
+# Use official Bun base image
 FROM oven/bun:1-alpine
 
-# 设置工作目录
+# Set working directory
 WORKDIR /app
 
-# 复制 package.json 和 bun.lockb
+# Copy package.json and bun.lockb
 COPY package.json bun.lock* ./
 
-# 安装依赖
+# Install dependencies
 RUN bun install --frozen-lockfile --production
 
-# 拷贝源码
+# Copy source code
 COPY src ./src
 
-# 创建非root用户
+# Create non-root user
 RUN addgroup -g 1001 -S bunuser && \
     adduser -S bunuser -u 1001
 
-# 更改文件所有权
+# Change file ownership
 RUN chown -R bunuser:bunuser /app
 USER bunuser
 
-# 设置环境变量
+# Set environment variables
 ENV NODE_ENV=production
-# 默认端口设置，可被部署环境覆盖
+# Default port setting, can be overridden by deployment environment
 ENV PORT=3000
 
-# 暴露端口（使用ARG允许构建时覆盖）
+# Expose port (using ARG allows override at build time)
 EXPOSE ${PORT}
 
-# 启动命令
+# Start command
 CMD ["bun", "src/index.ts"]

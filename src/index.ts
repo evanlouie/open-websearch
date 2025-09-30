@@ -34,11 +34,11 @@ async function main() {
   // Only set up HTTP server if enabled
   if (config.enableHttpServer) {
     console.error('🔌 Starting HTTP server...');
-    // 创建 Express 应用
+    // Create Express app
     const app = express();
     app.use(express.json());
 
-    // 是否启用跨域
+    // Enable CORS if configured
     if (config.enableCors) {
       app.use(cors({
         origin: config.corsOrigin || '*',

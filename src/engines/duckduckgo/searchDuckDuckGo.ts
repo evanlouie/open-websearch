@@ -24,7 +24,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
       return results;
     }
   } catch (error) {
-    console.error('预加载URL方法失败，尝试HTML方法:', error);
+    console.error('Preload URL method failed, trying HTML method:', error);
   }
 
   return await searchDuckDuckGoHtml(query, limit, effectiveProxyUrl);
@@ -76,7 +76,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
         const href = $(el).attr('href');
         if (href && href.includes('links.duckduckgo.com/d.js')) {
           basePreloadUrl = href;
-          return false; // 停止循环
+          return false; // Stop loop
         }
       });
 
@@ -100,7 +100,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
       }
 
       if (!basePreloadUrl) {
-        console.error('无法找到预加载的d.js URL');
+        console.error('Unable to find preloaded d.js URL');
         return [];
       }
 
@@ -181,7 +181,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
             offset += validResultsInCurrentPage;
 
           } catch (error) {
-            console.error('解析JSONP数据失败:', error);
+            console.error('Failed to parse JSONP data:', error);
             hasMoreResults = false;
           }
         } else {
@@ -192,7 +192,7 @@ export async function searchDuckDuckGo(query: string, limit: number): Promise<Se
 
       return results.slice(0, maxResults);
     } catch (error) {
-      console.error('DuckDuckGo预加载URL搜索失败:', error);
+      console.error('DuckDuckGo preload URL search failed:', error);
       return [];
     }
   }

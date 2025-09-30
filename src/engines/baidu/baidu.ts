@@ -68,5 +68,5 @@ export async function searchBaidu(query: string, limit: number): Promise<SearchR
         pn += 10;
     }
 
-    return allResults.slice(0, limit); // 截取最多 limit 个
+    return allResults.slice(0, limit); // Take at most limit results
 }

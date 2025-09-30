@@ -16,11 +16,11 @@ import {fetchGithubReadme} from "../engines/github/index.js";
 import { fetchJuejinArticle } from "../engines/juejin/fetchJuejinArticle.js";
 import { searchJuejin } from "../engines/juejin/index.js";
 
-// 支持的搜索引擎
+// Supported search engines
 const SUPPORTED_ENGINES = ['baidu', 'bing', 'linuxdo', 'csdn', 'duckduckgo','exa','brave','juejin'] as const;
 type SupportedEngine = typeof SUPPORTED_ENGINES[number];
 
-// 搜索引擎调用函数映射
+// Search engine function mapping
 const engineMap: Record<SupportedEngine, (query: string, limit: number) => Promise<SearchResult[]>> = {
     baidu: searchBaidu,
     bing: searchBing,
@@ -32,7 +32,7 @@ const engineMap: Record<SupportedEngine, (query: string, limit: number) => Promi
     juejin: searchJuejin,
 };
 
-// 分配搜索结果数量
+// Distribute search result limits
 const distributeLimit = (totalLimit: number, engineCount: number): number[] => {
     const base = Math.floor(totalLimit / engineCount);
     const remainder = totalLimit % engineCount;
@@ -42,7 +42,7 @@ const distributeLimit = (totalLimit: number, engineCount: number): number[] => {
     );
 };
 
-// 执行搜索
+// Execute search
 const executeSearch = async (query: string, engines: string[], limit: number): Promise<SearchResult[]> => {
     // Clean up the query string to ensure it won't cause issues due to spaces or special characters
     const cleanQuery = query.trim();
@@ -80,7 +80,7 @@ const executeSearch = async (query: string, engines: string[], limit: number): P
     }
 };
 
-// 验证文章 URL
+// Validate article URL
 const validateArticleUrl = (url: string, type: 'linuxdo' | 'csdn' | 'juejin'): boolean => {
     try {
         const urlObj = new URL(url);
@@ -100,24 +100,24 @@ const validateArticleUrl = (url: string, type: 'linuxdo' | 'csdn' | 'juejin'): b
     }
 };
 
-// 验证 GitHub URL
+// Validate GitHub URL
 const validateGithubUrl = (url: string): boolean => {
     try {
 
         const isSshGithub = /^git@github\.com:/.test(url);
 
         if (isSshGithub) {
-            // SSH 格式: git@github.com:owner/repo.git
+            // SSH format: git@github.com:owner/repo.git
             return /^git@github\.com:[^\/]+\/[^\/]+/.test(url);
         }
 
         const urlObj = new URL(url);
 
-        // 支持多种 GitHub URL 格式
+        // Support multiple GitHub URL formats
         const isHttpsGithub = urlObj.hostname === 'github.com' || urlObj.hostname === 'www.github.com';
 
         if (isHttpsGithub) {
-            // 检查路径格式: /owner/repo
+            // Check path format: /owner/repo
             const pathParts = urlObj.pathname.split('/').filter(part => part.length > 0);
             return pathParts.length >= 2;
         }
@@ -129,8 +129,8 @@ const validateGithubUrl = (url: string): boolean => {
 };
 
 export const setupTools = (server: McpServer): void => {
-    // 搜索工具
-    // 生成搜索工具的动态描述
+    // Search tool
+    // Generate dynamic description for search tool
     const getSearchDescription = () => {
         if (config.allowedSearchEngines.length === 0) {
             return "Search the web using multiple engines (e.g., Baidu, Bing, DuckDuckGo, CSDN, Exa, Brave, Juejin(掘金)) with no API key required";
@@ -147,9 +147,9 @@ export const setupTools = (server: McpServer): void => {
         }
     };
 
-    // 生成搜索引擎选项的枚举
+    // Generate enumeration of search engine options
     const getEnginesEnum = () => {
-        // 如果没有限制，使用所有支持的引擎
+        // If no restrictions, use all supported engines
         const allowedEngines = config.allowedSearchEngines.length > 0
             ? config.allowedSearchEngines
             : [...SUPPORTED_ENGINES];
@@ -165,12 +165,12 @@ export const setupTools = (server: McpServer): void => {
             limit: z.number().min(1).max(50).default(10),
             engines: z.array(getEnginesEnum()).min(1).default([config.defaultSearchEngine])
                 .transform(requestedEngines => {
-                    // 如果有配置允许的搜索引擎，过滤请求的引擎
+                    // If allowed search engines are configured, filter requested engines
                     if (config.allowedSearchEngines.length > 0) {
                         const filteredEngines = requestedEngines.filter(engine =>
                             config.allowedSearchEngines.includes(engine));
 
-                        // 如果所有请求的引擎都被过滤掉，使用默认引擎
+                        // If all requested engines are filtered out, use default engine
                         return filteredEngines.length > 0 ?
                             filteredEngines :
                             [config.defaultSearchEngine];
@@ -208,7 +208,7 @@ export const setupTools = (server: McpServer): void => {
         }
     );
 
-    // 获取 Linux.do 文章工具
+    // Linux.do article fetching tool
     server.tool(
         'fetchLinuxDoArticle',
         "Fetch full article content from a linux.do post URL",
@@ -242,7 +242,7 @@ export const setupTools = (server: McpServer): void => {
         }
     );
 
-    // 获取 CSDN 文章工具
+    // CSDN article fetching tool
     server.tool(
         'fetchCsdnArticle',
         "Fetch full article content from a csdn post URL",
@@ -276,7 +276,7 @@ export const setupTools = (server: McpServer): void => {
         }
     );
 
-    // 获取 GitHub README 工具
+    // GitHub README fetching tool
     server.tool(
         'fetchGithubReadme',
         "Fetch README content from a GitHub repository URL",
@@ -320,7 +320,7 @@ export const setupTools = (server: McpServer): void => {
         }
     );
 
-    // 获取掘金文章工具
+    // Juejin article fetching tool
     server.tool(
         'fetchJuejinArticle',
         "Fetch full article content from a Juejin(掘金) post URL",

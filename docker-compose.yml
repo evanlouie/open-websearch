@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   web-search:
-#    image: registry.cn-hangzhou.aliyuncs.com/aasee-share/open-web-search:latest # 国内
+#    image: registry.cn-hangzhou.aliyuncs.com/aasee-share/open-web-search:latest # China region
     image: ghcr.io/aas-ee/open-web-search:latest
     container_name: web-search
     working_dir: /app
@@ -17,5 +17,5 @@ services:
       # USE_PROXY: true # Using a proxy (optional)
       # PROXY_URL: "http://host.docker.internal:7890"  #  Using a proxy (optional)
       ENABLE_CORS: "true"
-      CORS_ORIGIN: "*"  # Multiple values can be separated by commas and parsed accordingly | 可以多个值逗号分隔，自行解析
-    command: ["node", "build/index.js"]
+      CORS_ORIGIN: "*"  # Multiple values can be separated by commas and parsed accordingly
+    command: ["bun", "src/index.ts"]
