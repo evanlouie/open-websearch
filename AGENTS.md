@@ -222,6 +222,9 @@ The project MUST maintain:
 - Use `error instanceof Error` checks in catch blocks
 - Define interfaces for external API responses (e.g., `DuckDuckGoSearchItem`)
 - Use type guards (`axios.isAxiosError()`) for error handling
+- Model optional data with `Effect.Option` rather than `null` / `undefined`
+- Represent recoverable failures with `Effect.Either` instead of `throw`
+- Reach for `effect/Array`, `effect/List`, and `effect/Stream` helpers before manual loops so collection logic stays effect-aware and immutable
 
 ## Important Notes
 
@@ -260,7 +263,6 @@ Below is a practical **Effect (TypeScript) reference guide**—a “most-used fi
 ## 0) The mental model
 
 - **Effect<A, E, R>** — a _description_ of a computation that:
-
   - **Succeeds** with `A`,
   - may **fail** with a _typed_ error `E`,
   - and may **require** services / dependencies `R`.
