@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
-import { Effect } from "effect";
+import { Effect, pipe } from "effect";
+import * as List from "effect/List";
 import { SearchEngineError, type SearchResult } from "../types.js";
 import { getConfig, type AppConfig } from "../config.js";
 
@@ -80,18 +81,23 @@ export const searchBing = (
   Effect.gen(function* (_) {
     yield* _(getConfig);
 
-    let allResults: SearchResult[] = [];
+    let allResults = List.empty<SearchResult>();
+    let collected = 0;
     let page = 0;
 
-    while (allResults.length < limit) {
+    while (collected < limit) {
       const response = yield* _(fetchResults(query, page));
       const pageResults = yield* _(
         Effect.sync(() => parseResults(response.data)),
       );
 
-      allResults = allResults.concat(pageResults);
+      const pageResultsList = List.fromIterable(pageResults);
+      const pageResultsCount = List.size(pageResultsList);
 
-      if (pageResults.length === 0) {
+      allResults = pipe(allResults, List.appendAll(pageResultsList));
+      collected += pageResultsCount;
+
+      if (pageResultsCount === 0) {
         yield* _(
           Effect.logWarning(
             "⚠️ Bing returned no additional Bing results, ending early.",
@@ -103,5 +109,5 @@ export const searchBing = (
       page += 1;
     }
 
-    return allResults.slice(0, limit);
+    return pipe(allResults, List.take(limit), List.toArray);
   });

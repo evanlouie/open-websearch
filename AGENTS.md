@@ -395,7 +395,6 @@ await Effect.runPromise(usesClock.pipe(Effect.provide(LiveClock)));
 ## 6) Error management (typed failures & defects)
 
 - **Two error classes**:
-
   - **Expected (typed)** domain failures in the `E` channel (use `fail`/`try`/`tryPromise`, handle with `catch*` family).
   - **Unexpected (defects)** like programmer bugs—tracked by the runtime, accessible via causes/sandboxing. ([Effect][10])
 

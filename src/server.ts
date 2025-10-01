@@ -1,4 +1,4 @@
-import { Cause, Effect } from "effect";
+import { Cause, Effect, Either, Option, pipe } from "effect";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -72,6 +72,8 @@ type Transports = {
   sse: SseTransports;
 };
 
+const missingSessionMessage = "Invalid or missing session ID";
+
 const connectServer = (server: McpServer, transport: SSEServerTransport) =>
   Effect.tryPromise<void, Error>({
     try: () => server.connect(transport),
@@ -125,11 +127,39 @@ const writeText = (res: ServerResponse, status: number, message: string) =>
     res.end(message);
   });
 
+const getHeaderValue = (headers: IncomingMessage["headers"], key: string) =>
+  pipe(
+    Option.fromNullable(headers[key]),
+    Option.flatMap((raw) => {
+      if (Array.isArray(raw)) {
+        return Option.fromNullable(raw[0]);
+      }
+      return typeof raw === "string" ? Option.some(raw) : Option.none<string>();
+    }),
+    Option.map((value) => value.trim()),
+    Option.filter((value) => value.length > 0),
+  );
+
 const ensureStreamableTransport = (transports: Transports, sessionId: string) =>
-  transports.streamable[sessionId];
+  Option.fromNullable(transports.streamable[sessionId]);
 
 const ensureSseTransport = (transports: Transports, sessionId: string) =>
-  transports.sse[sessionId];
+  Option.fromNullable(transports.sse[sessionId]);
+
+const requireStreamableTransport = (
+  transports: Transports,
+  sessionId: string,
+) =>
+  Either.fromOption(
+    ensureStreamableTransport(transports, sessionId),
+    () => missingSessionMessage,
+  );
+
+const requireSseTransport = (transports: Transports, sessionId: string) =>
+  Either.fromOption(
+    ensureSseTransport(transports, sessionId),
+    () => "No transport found for sessionId",
+  );
 
 const handleStreamableInitialize = (
   server: McpServer,
@@ -167,46 +197,51 @@ const handlePostMcp = (
   res: ServerResponse,
 ) =>
   Effect.gen(function* (_) {
-    const sessionIdHeader = req.headers["mcp-session-id"] as string | undefined;
+    const sessionIdOption = getHeaderValue(req.headers, "mcp-session-id");
     const body = yield* _(parseBody(req));
 
-    if (sessionIdHeader) {
-      const existing = ensureStreamableTransport(transports, sessionIdHeader);
-      if (!existing) {
-        yield* _(
-          writeJson(res, 400, {
-            jsonrpc: "2.0",
-            error: {
-              code: -32000,
-              message: "Bad Request: No valid session ID provided",
-            },
-            id: null,
-          }),
-        );
-        return;
-      }
+    const result = pipe(
+      sessionIdOption,
+      Option.match({
+        onSome: (sessionId) =>
+          pipe(
+            ensureStreamableTransport(transports, sessionId),
+            Option.match({
+              onSome: (transport) =>
+                handleTransportRequest(transport, req, res, body),
+              onNone: () =>
+                writeJson(res, 400, {
+                  jsonrpc: "2.0",
+                  error: {
+                    code: -32000,
+                    message: "Bad Request: No valid session ID provided",
+                  },
+                  id: null,
+                }),
+            }),
+          ),
+        onNone: () => {
+          if (!isInitializeRequest(body)) {
+            return writeJson(res, 400, {
+              jsonrpc: "2.0",
+              error: {
+                code: -32000,
+                message: "Bad Request: No valid session ID provided",
+              },
+              id: null,
+            });
+          }
 
-      yield* _(handleTransportRequest(existing, req, res, body));
-      return;
-    }
+          return handleStreamableInitialize(server, transports).pipe(
+            Effect.flatMap((transport) =>
+              handleTransportRequest(transport, req, res, body),
+            ),
+          );
+        },
+      }),
+    );
 
-    if (!isInitializeRequest(body)) {
-      yield* _(
-        writeJson(res, 400, {
-          jsonrpc: "2.0",
-          error: {
-            code: -32000,
-            message: "Bad Request: No valid session ID provided",
-          },
-          id: null,
-        }),
-      );
-      return;
-    }
-
-    const transport = yield* _(handleStreamableInitialize(server, transports));
-
-    yield* _(handleTransportRequest(transport, req, res, body));
+    yield* _(result);
   });
 
 const handleGetMcp = (
@@ -215,19 +250,25 @@ const handleGetMcp = (
   res: ServerResponse,
 ) =>
   Effect.gen(function* (_) {
-    const sessionId = req.headers["mcp-session-id"] as string | undefined;
-    if (!sessionId) {
-      yield* _(writeText(res, 400, "Invalid or missing session ID"));
-      return;
-    }
+    const sessionIdOption = getHeaderValue(req.headers, "mcp-session-id");
 
-    const transport = ensureStreamableTransport(transports, sessionId);
-    if (!transport) {
-      yield* _(writeText(res, 400, "Invalid or missing session ID"));
-      return;
-    }
+    const outcome = pipe(
+      sessionIdOption,
+      Option.match({
+        onSome: (sessionId) =>
+          pipe(
+            requireStreamableTransport(transports, sessionId),
+            Either.match({
+              onRight: (transport) =>
+                handleTransportRequest(transport, req, res),
+              onLeft: (message: string) => writeText(res, 400, message),
+            }),
+          ),
+        onNone: () => writeText(res, 400, missingSessionMessage),
+      }),
+    );
 
-    yield* _(handleTransportRequest(transport, req, res));
+    yield* _(outcome);
   });
 
 const handleDeleteMcp = (
@@ -236,19 +277,25 @@ const handleDeleteMcp = (
   res: ServerResponse,
 ) =>
   Effect.gen(function* (_) {
-    const sessionId = req.headers["mcp-session-id"] as string | undefined;
-    if (!sessionId) {
-      yield* _(writeText(res, 400, "Invalid or missing session ID"));
-      return;
-    }
+    const sessionIdOption = getHeaderValue(req.headers, "mcp-session-id");
 
-    const transport = ensureStreamableTransport(transports, sessionId);
-    if (!transport) {
-      yield* _(writeText(res, 400, "Invalid or missing session ID"));
-      return;
-    }
+    const outcome = pipe(
+      sessionIdOption,
+      Option.match({
+        onSome: (sessionId) =>
+          pipe(
+            requireStreamableTransport(transports, sessionId),
+            Either.match({
+              onRight: (transport) =>
+                handleTransportRequest(transport, req, res),
+              onLeft: (message: string) => writeText(res, 400, message),
+            }),
+          ),
+        onNone: () => writeText(res, 400, missingSessionMessage),
+      }),
+    );
 
-    yield* _(handleTransportRequest(transport, req, res));
+    yield* _(outcome);
   });
 
 const handleGetSse = (
@@ -275,20 +322,33 @@ const handlePostMessages = (
   url: URL,
 ) =>
   Effect.gen(function* (_) {
-    const sessionId = url.searchParams.get("sessionId");
-    if (!sessionId) {
-      yield* _(writeText(res, 400, "No transport found for sessionId"));
-      return;
-    }
+    const sessionIdOption = pipe(
+      Option.fromNullable(url.searchParams.get("sessionId")),
+      Option.map((value) => value.trim()),
+      Option.filter((value) => value.length > 0),
+    );
 
-    const transport = ensureSseTransport(transports, sessionId);
-    if (!transport) {
-      yield* _(writeText(res, 400, "No transport found for sessionId"));
-      return;
-    }
+    const outcome = pipe(
+      sessionIdOption,
+      Option.match({
+        onSome: (sessionId) =>
+          pipe(
+            requireSseTransport(transports, sessionId),
+            Either.match({
+              onRight: (transport) =>
+                parseBody(req).pipe(
+                  Effect.flatMap((body) =>
+                    handleSsePostMessage(transport, req, res, body),
+                  ),
+                ),
+              onLeft: (message: string) => writeText(res, 400, message),
+            }),
+          ),
+        onNone: () => writeText(res, 400, "No transport found for sessionId"),
+      }),
+    );
 
-    const body = yield* _(parseBody(req));
-    yield* _(handleSsePostMessage(transport, req, res, body));
+    yield* _(outcome);
   });
 
 const handleUnknownRoute = (res: ServerResponse) =>
@@ -303,10 +363,23 @@ const handleHttpRequest = (
 ) =>
   Effect.gen(function* (_) {
     const url = yield* _(
-      Effect.sync(() => new URL(req.url ?? "/", `http://${req.headers.host}`)),
+      Effect.sync(() => {
+        const rawUrl = pipe(
+          Option.fromNullable(req.url),
+          Option.getOrElse(() => "/"),
+        );
+        const host = pipe(
+          Option.fromNullable(req.headers.host),
+          Option.getOrElse(() => "localhost"),
+        );
+        return new URL(rawUrl, `http://${host}`);
+      }),
     );
     const pathname = url.pathname;
-    const method = req.method ?? "GET";
+    const method = pipe(
+      Option.fromNullable(req.method),
+      Option.getOrElse(() => "GET"),
+    );
 
     yield* _(
       Effect.sync(() =>
@@ -363,8 +436,14 @@ export const createHttpServer = (
     };
 
     const resolvedOptions: Required<HttpServerOptions> = {
-      enableCors: options.enableCors ?? false,
-      corsOrigin: options.corsOrigin ?? "*",
+      enableCors: pipe(
+        Option.fromNullable(options.enableCors),
+        Option.getOrElse(() => false),
+      ),
+      corsOrigin: pipe(
+        Option.fromNullable(options.corsOrigin),
+        Option.getOrElse(() => "*"),
+      ),
     };
 
     return createServer((req, res) => {
@@ -374,8 +453,14 @@ export const createHttpServer = (
             Effect.logError("Error handling request").pipe(
               Effect.annotateLogs({
                 cause: Cause.pretty(cause),
-                method: req.method ?? "GET",
-                path: req.url ?? "/",
+                method: pipe(
+                  Option.fromNullable(req.method),
+                  Option.getOrElse(() => "GET"),
+                ),
+                path: pipe(
+                  Option.fromNullable(req.url),
+                  Option.getOrElse(() => "/"),
+                ),
               }),
               Effect.flatMap(() =>
                 Effect.sync(() => {

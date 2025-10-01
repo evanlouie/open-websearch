@@ -1,4 +1,7 @@
-import { Effect } from "effect";
+import { Effect, Option, pipe } from "effect";
+import * as Arr from "effect/Array";
+import * as Chunk from "effect/Chunk";
+import * as Stream from "effect/Stream";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SearchEngineError, type SearchResult } from "../types.js";
@@ -29,12 +32,16 @@ const engineMap: Record<
 };
 
 const distributeLimit = (totalLimit: number, engineCount: number): number[] => {
+  if (engineCount <= 0) {
+    return [];
+  }
+
   const base = Math.floor(totalLimit / engineCount);
   const remainder = totalLimit % engineCount;
 
-  return Array.from(
-    { length: engineCount },
-    (_, index) => base + (index < remainder ? 1 : 0),
+  return pipe(
+    Arr.makeBy(engineCount, (index) => base + (index < remainder ? 1 : 0)),
+    Arr.fromIterable,
   );
 };
 
@@ -58,8 +65,11 @@ const executeMultiQuerySearch = (
   config: AppConfig,
 ): Effect.Effect<AggregatedQueryResult[], never, never> =>
   Effect.gen(function* (_) {
-    const cleanedQueries = queries.map((query) => query.trim());
-    const uniqueQueries = [...new Set(cleanedQueries)];
+    const cleanedQueries = pipe(
+      queries,
+      Arr.map((query) => query.trim()),
+    );
+    const uniqueQueries = pipe(cleanedQueries, Arr.dedupe);
     const limits = distributeLimit(limit, engines.length);
 
     yield* _(
@@ -73,76 +83,101 @@ const executeMultiQuerySearch = (
       ),
     );
 
-    const engineEffects = engines.map((engine, engineIndex) => {
-      const searchFn = engineMap[engine];
-      const engineLimit = limits[engineIndex];
+    const engineResults = yield* _(
+      pipe(
+        Stream.fromIterable(Arr.fromIterable(engines.entries())),
+        Stream.mapEffect(
+          ([engineIndex, engine]) => {
+            const searchFn = engineMap[engine];
+            const engineLimit = pipe(
+              Arr.get(limits, engineIndex),
+              Option.getOrElse(() => limit),
+            );
 
-      return Effect.forEach(uniqueQueries, (query) => {
-        if (!query) {
-          return Effect.succeed<EngineQueryResult>({
-            query,
-            engine,
-            results: [],
-          });
-        }
+            return pipe(
+              Stream.fromIterable(uniqueQueries),
+              Stream.mapEffect((query) => {
+                if (!query) {
+                  return Effect.succeed<EngineQueryResult>({
+                    query,
+                    engine,
+                    results: [],
+                  });
+                }
 
-        const effect = searchFn(query, engineLimit).pipe(
-          Effect.provideService(AppConfigTag, config),
-          Effect.provide(StderrLoggerLayer),
-          Effect.map(
-            (results): EngineQueryResult => ({
-              query,
-              engine,
-              results,
-            }),
-          ),
-          Effect.tapError((error) =>
-            Effect.logError("Search failed.").pipe(
-              Effect.annotateLogs({
-                engine,
-                query,
-                error: error instanceof Error ? error.message : String(error),
-                stack:
-                  error instanceof Error && error.stack
-                    ? error.stack
-                    : undefined,
+                return searchFn(query, engineLimit).pipe(
+                  Effect.provideService(AppConfigTag, config),
+                  Effect.provide(StderrLoggerLayer),
+                  Effect.map(
+                    (results): EngineQueryResult => ({
+                      query,
+                      engine,
+                      results,
+                    }),
+                  ),
+                  Effect.tapError((error) =>
+                    Effect.logError("Search failed.").pipe(
+                      Effect.annotateLogs({
+                        engine,
+                        query,
+                        error:
+                          error instanceof Error
+                            ? error.message
+                            : String(error),
+                        stack:
+                          error instanceof Error && error.stack
+                            ? error.stack
+                            : undefined,
+                      }),
+                    ),
+                  ),
+                  Effect.orElseSucceed(() => ({
+                    query,
+                    engine,
+                    results: [],
+                  })),
+                );
+              }),
+              Stream.runCollect,
+              Effect.map((chunk) => Chunk.toReadonlyArray(chunk)),
+            );
+          },
+          { concurrency: "unbounded" },
+        ),
+        Stream.runCollect,
+        Effect.map((chunk) => Chunk.toReadonlyArray(chunk)),
+      ),
+    );
+
+    const aggregated = pipe(
+      cleanedQueries,
+      Arr.map((originalQuery) => {
+        const aggregatedResults = pipe(
+          engineResults,
+          Arr.flatMap((engineEntries) =>
+            pipe(
+              Arr.findFirst(
+                engineEntries,
+                (result) => result.query === originalQuery,
+              ),
+              Option.match({
+                onSome: (match) => match.results,
+                onNone: () => [],
               }),
             ),
           ),
-          Effect.orElseSucceed(() => ({
-            query,
-            engine,
-            results: [],
-          })),
         );
 
-        return effect;
-      });
-    });
-
-    const allEngineResults = yield* _(
-      Effect.all(engineEffects, { concurrency: "unbounded" }),
+        return {
+          query: originalQuery,
+          engines,
+          totalResults: aggregatedResults.length,
+          results: pipe(aggregatedResults, Arr.take(limit)),
+        } satisfies AggregatedQueryResult;
+      }),
     );
 
-    return cleanedQueries.map<AggregatedQueryResult>((originalQuery) => {
-      const aggregatedResults: SearchResult[] = [];
-
-      for (const engineResults of allEngineResults) {
-        const match = engineResults.find(
-          (result) => result.query === originalQuery,
-        );
-        if (match) {
-          aggregatedResults.push(...match.results);
-        }
-      }
-
-      return {
-        query: originalQuery,
-        engines,
-        totalResults: aggregatedResults.length,
-        results: aggregatedResults.slice(0, limit),
-      };
-    });
+    return Arr.fromIterable(aggregated);
   });
 
 const SearchResultSchema = z.object({
@@ -165,9 +200,12 @@ const SearchOutputSchema = {
 };
 
 const resolveAllowedEngines = (config: AppConfig): SupportedEngine[] =>
-  config.allowedSearchEngines.length > 0
-    ? (config.allowedSearchEngines as SupportedEngine[])
-    : [...SUPPORTED_ENGINES];
+  Arr.isNonEmptyReadonlyArray(config.allowedSearchEngines)
+    ? Array.from(
+        config.allowedSearchEngines,
+        (engine) => engine as SupportedEngine,
+      )
+    : Array.from(supportedSearchEngines, (engine) => engine as SupportedEngine);
 
 const toEngineEnum = (engines: SupportedEngine[]) =>
   z.enum(engines as [SupportedEngine, ...SupportedEngine[]]);
@@ -177,17 +215,22 @@ const buildSearchDescription = (config: AppConfig): string => {
     "⚠️ WARNING: Bing is currently experiencing issues and may not return results. Recommended engines: Brave or DuckDuckGo. ";
   const engines = resolveAllowedEngines(config);
 
-  if (config.allowedSearchEngines.length === 0) {
+  if (!Arr.isNonEmptyReadonlyArray(config.allowedSearchEngines)) {
     return (
       bingWarning +
       "Search the web using Bing, Brave, or DuckDuckGo. Supports single or multiple queries (max 10). No API key required."
     );
   }
 
-  const enginesText = engines
-    .map((engine) => engine.charAt(0).toUpperCase() + engine.slice(1))
-    .join(", ");
-  const hasBing = engines.includes("bing");
+  const enginesText = pipe(
+    engines,
+    Arr.map((engine) => engine.charAt(0).toUpperCase() + engine.slice(1)),
+    (values) => values.join(", "),
+  );
+  const hasBing = pipe(
+    engines,
+    Arr.some((engine) => engine === "bing"),
+  );
 
   return (
     (hasBing ? bingWarning : "") +
@@ -231,13 +274,18 @@ export const setupTools = (server: McpServer) =>
                   `Array of strings: Search engines to use. Example: ["brave", "duckduckgo"]. Default: ["${config.defaultSearchEngine}"]`,
                 )
                 .transform((requestedEngines) => {
-                  if (config.allowedSearchEngines.length > 0) {
-                    const filtered = requestedEngines.filter((engine) =>
-                      config.allowedSearchEngines.includes(engine),
+                  if (
+                    Arr.isNonEmptyReadonlyArray(config.allowedSearchEngines)
+                  ) {
+                    const filtered = pipe(
+                      requestedEngines,
+                      Arr.filter((engine) =>
+                        config.allowedSearchEngines.includes(engine),
+                      ),
                     );
 
-                    return filtered.length > 0
-                      ? filtered
+                    return Arr.isNonEmptyReadonlyArray(filtered)
+                      ? Arr.fromIterable(filtered)
                       : [config.defaultSearchEngine];
                   }
                   return requestedEngines;

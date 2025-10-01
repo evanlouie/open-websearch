@@ -1,11 +1,14 @@
 import axios, { AxiosRequestConfig } from "axios";
 import * as cheerio from "cheerio";
-import { Effect } from "effect";
+import { Effect, Option, pipe } from "effect";
+import * as List from "effect/List";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { getProxyUrl, type AppConfig } from "../config.js";
 import { SearchEngineError, type SearchResult } from "../types.js";
 
-const createRequestOptions = (proxyUrl?: string): AxiosRequestConfig => {
+const createRequestOptions = (
+  proxyUrl: Option.Option<string>,
+): AxiosRequestConfig => {
   const options: AxiosRequestConfig = {
     headers: {
       "User-Agent":
@@ -28,11 +31,17 @@ const createRequestOptions = (proxyUrl?: string): AxiosRequestConfig => {
     },
   };
 
-  if (proxyUrl) {
-    const proxyAgent = new HttpsProxyAgent(proxyUrl);
-    options.httpAgent = proxyAgent;
-    options.httpsAgent = proxyAgent;
-  }
+  pipe(
+    proxyUrl,
+    Option.match({
+      onNone: () => undefined,
+      onSome: (url) => {
+        const proxyAgent = new HttpsProxyAgent(url);
+        options.httpAgent = proxyAgent;
+        options.httpsAgent = proxyAgent;
+      },
+    }),
+  );
 
   return options;
 };
@@ -93,18 +102,23 @@ export const searchBrave = (
     const proxyUrl = yield* _(getProxyUrl());
     const requestOptions = createRequestOptions(proxyUrl);
 
-    let allResults: SearchResult[] = [];
+    let allResults = List.empty<SearchResult>();
+    let collected = 0;
     let offset = 0;
 
-    while (allResults.length < limit) {
+    while (collected < limit) {
       const response = yield* _(fetchResults(query, offset, requestOptions));
       const pageResults = yield* _(
         Effect.sync(() => parseResults(response.data)),
       );
 
-      allResults = allResults.concat(pageResults);
+      const pageResultsList = List.fromIterable(pageResults);
+      const pageResultsCount = List.size(pageResultsList);
 
-      if (pageResults.length === 0) {
+      allResults = pipe(allResults, List.appendAll(pageResultsList));
+      collected += pageResultsCount;
+
+      if (pageResultsCount === 0) {
         yield* _(
           Effect.logWarning(
             "⚠️ Brave returned no additional Brave results, ending early.",
@@ -116,5 +130,5 @@ export const searchBrave = (
       offset += 1;
     }
 
-    return allResults.slice(0, limit);
+    return pipe(allResults, List.take(limit), List.toArray);
   });

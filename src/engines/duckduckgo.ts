@@ -1,6 +1,6 @@
 import axios, { AxiosRequestConfig } from "axios";
 import * as cheerio from "cheerio";
-import { Effect } from "effect";
+import { Effect, Option, pipe } from "effect";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { getProxyUrl, type AppConfig } from "../config.js";
 import { SearchEngineError, type SearchResult } from "../types.js";
@@ -20,7 +20,9 @@ interface DuckDuckGoSearchItem {
   n?: boolean;
 }
 
-const createProxyAwareOptions = (proxyUrl?: string): AxiosRequestConfig => {
+const createProxyAwareOptions = (
+  proxyUrl: Option.Option<string>,
+): AxiosRequestConfig => {
   const options: AxiosRequestConfig = {
     headers: {
       "User-Agent":
@@ -43,11 +45,17 @@ const createProxyAwareOptions = (proxyUrl?: string): AxiosRequestConfig => {
     },
   };
 
-  if (proxyUrl) {
-    const proxyAgent = new HttpsProxyAgent(proxyUrl);
-    options.httpAgent = proxyAgent;
-    options.httpsAgent = proxyAgent;
-  }
+  pipe(
+    proxyUrl,
+    Option.match({
+      onNone: () => undefined,
+      onSome: (url) => {
+        const proxyAgent = new HttpsProxyAgent(url);
+        options.httpAgent = proxyAgent;
+        options.httpsAgent = proxyAgent;
+      },
+    }),
+  );
 
   return options;
 };
@@ -55,7 +63,7 @@ const createProxyAwareOptions = (proxyUrl?: string): AxiosRequestConfig => {
 const searchDuckDuckGoPreloadUrlPromise = async (
   query: string,
   maxResults: number,
-  proxyUrl?: string,
+  proxyUrl: Option.Option<string>,
 ): Promise<SearchResult[]> => {
   const results: SearchResult[] = [];
   const requestOptions = createProxyAwareOptions(proxyUrl);
@@ -147,10 +155,23 @@ const searchDuckDuckGoPreloadUrlPromise = async (
       if (results.length >= maxResults) break;
 
       results.push({
-        title: item.t ?? "",
-        url: item.u ?? "",
-        description: item.a ?? "",
-        source: item.i ?? item.sn ?? "",
+        title: pipe(
+          Option.fromNullable(item.t),
+          Option.getOrElse(() => ""),
+        ),
+        url: pipe(
+          Option.fromNullable(item.u),
+          Option.getOrElse(() => ""),
+        ),
+        description: pipe(
+          Option.fromNullable(item.a),
+          Option.getOrElse(() => ""),
+        ),
+        source: pipe(
+          Option.fromNullable(item.i),
+          Option.orElse(() => Option.fromNullable(item.sn)),
+          Option.getOrElse(() => ""),
+        ),
         engine: "duckduckgo",
       });
     }
@@ -168,7 +189,7 @@ const searchDuckDuckGoPreloadUrlPromise = async (
 const searchDuckDuckGoHtmlPromise = async (
   query: string,
   maxResults: number,
-  proxyUrl?: string,
+  proxyUrl: Option.Option<string>,
 ): Promise<SearchResult[]> => {
   const requestUrl = "https://html.duckduckgo.com/html/";
   const results: SearchResult[] = [];
@@ -182,11 +203,17 @@ const searchDuckDuckGoHtmlPromise = async (
     },
   };
 
-  if (proxyUrl) {
-    const proxyAgent = new HttpsProxyAgent(proxyUrl);
-    requestOptions.httpAgent = proxyAgent;
-    requestOptions.httpsAgent = proxyAgent;
-  }
+  pipe(
+    proxyUrl,
+    Option.match({
+      onNone: () => undefined,
+      onSome: (url) => {
+        const proxyAgent = new HttpsProxyAgent(url);
+        requestOptions.httpAgent = proxyAgent;
+        requestOptions.httpsAgent = proxyAgent;
+      },
+    }),
+  );
 
   let offset = 0;
   let response = await axios.post(
@@ -205,7 +232,10 @@ const searchDuckDuckGoHtmlPromise = async (
       const titleEl = $(el).find("a.result__a");
       const snippetEl = $(el).find(".result__snippet");
       const title = titleEl.text().trim();
-      const url = titleEl.attr("href") ?? "";
+      const url = pipe(
+        Option.fromNullable(titleEl.attr("href")),
+        Option.getOrElse(() => ""),
+      );
       const description = snippetEl.text().trim();
       const sourceEl = $(el).find(".result__url");
       const source = sourceEl.text().trim();

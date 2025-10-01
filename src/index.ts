@@ -2,7 +2,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Server } from "node:http";
-import { Cause, Effect } from "effect";
+import { Cause, Effect, Either, Option, pipe } from "effect";
 import { AppConfigLayer, getConfig, type AppConfig } from "./config.js";
 import { createHttpServer, createMcpServer } from "./server.js";
 import { StderrLoggerLayer } from "./logging.js";
@@ -35,9 +35,15 @@ const listenHttpServer = (server: Server, port: number) =>
 
     const onListening = () => {
       server.off("error", onError);
-      const address = server.address();
-      const actualPort =
-        typeof address === "object" && address !== null ? address.port : port;
+      const actualPort = pipe(
+        Option.fromNullable(server.address()),
+        Option.flatMap((address) =>
+          typeof address === "object" && address !== null && "port" in address
+            ? Option.some((address as { port: number }).port)
+            : Option.none<number>(),
+        ),
+        Option.getOrElse(() => port),
+      );
       resume(Effect.logInfo(`✅ HTTP server running on port ${actualPort}`));
     };
 
@@ -69,13 +75,76 @@ const startHttpServer = (
     yield* _(listenHttpServer(httpServer, port));
   });
 
-const determinePort = Effect.sync(() =>
-  process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
-);
+const parsePort = (value: string) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed)
+    ? Either.left(new Error(`Invalid PORT value "${value}" provided.`))
+    : Either.right(parsed);
+};
 
-const shouldEnableStdio = Effect.sync(() => {
-  const mode = process.env.MODE;
-  return mode === undefined || mode === "both" || mode === "stdio";
+type RuntimeMode = "both" | "http" | "stdio";
+
+const parseRuntimeMode = (
+  modeOption: Option.Option<string>,
+): Either.Either<RuntimeMode, Error> =>
+  pipe(
+    modeOption,
+    Option.map((mode) => mode.trim().toLowerCase()),
+    Option.match({
+      onNone: () =>
+        Either.right<RuntimeMode>("both") as Either.Either<RuntimeMode, Error>,
+      onSome: (value) => {
+        if (value === "both" || value === "http" || value === "stdio") {
+          return Either.right(value as RuntimeMode) as Either.Either<
+            RuntimeMode,
+            Error
+          >;
+        }
+        return Either.left(
+          new Error(`Unsupported MODE value "${value}" provided.`),
+        ) as Either.Either<RuntimeMode, Error>;
+      },
+    }),
+  );
+
+const determinePort = Effect.gen(function* (_) {
+  const portOption = Option.fromNullable(process.env.PORT);
+
+  return yield* _(
+    pipe(
+      portOption,
+      Option.match({
+        onNone: () => Effect.succeed(3000),
+        onSome: (value) =>
+          Either.match(parsePort(value), {
+            onRight: Effect.succeed,
+            onLeft: (error) =>
+              Effect.logWarning(error.message).pipe(
+                Effect.annotateLogs({ variable: "PORT" }),
+                Effect.map(() => 3000),
+              ),
+          }),
+      }),
+    ),
+  );
+});
+
+const shouldEnableStdio = Effect.gen(function* (_) {
+  const modeOption = Option.fromNullable(process.env.MODE);
+  const parsedMode = parseRuntimeMode(modeOption);
+
+  const mode = yield* _(
+    Either.match(parsedMode, {
+      onRight: Effect.succeed,
+      onLeft: (error: Error) =>
+        Effect.logWarning(error.message).pipe(
+          Effect.annotateLogs({ variable: "MODE" }),
+          Effect.map(() => "both" as RuntimeMode),
+        ),
+    }),
+  );
+
+  return mode === "both" || mode === "stdio";
 });
 
 const program = Effect.gen(function* (_) {
