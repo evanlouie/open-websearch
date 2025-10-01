@@ -1,4 +1,4 @@
-import { Cause, Effect, Either, Option, pipe } from "effect";
+import { Cause, Effect, Either, Match, Option, pipe } from "effect";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -12,42 +12,79 @@ import {
 } from "node:http";
 import { setupTools } from "./tools/setupTools.js";
 
+/**
+ * Parses the JSON body from an HTTP request.
+ * Reads the request stream, collects chunks, and parses as JSON.
+ * Returns an empty object if body is empty.
+ *
+ * @param req - The incoming HTTP request
+ * @returns Effect that resolves to the parsed JSON body, or fails with Error
+ */
 export const parseBody = (req: IncomingMessage) =>
-  Effect.tryPromise<unknown, Error>({
-    try: () =>
-      new Promise((resolve, reject) => {
-        let body = "";
-        req.on("data", (chunk) => {
-          body += chunk;
-        });
-        req.on("end", () => {
-          try {
-            resolve(body ? JSON.parse(body) : {});
-          } catch (error) {
-            reject(error);
-          }
-        });
-        req.on("error", reject);
+  pipe(
+    Effect.tryPromise<string, Error>({
+      try: () =>
+        new Promise((resolve, reject) => {
+          let body = "";
+          req.on("data", (chunk) => {
+            body += chunk;
+          });
+          req.on("end", () => resolve(body));
+          req.on("error", reject);
+        }),
+      catch: (cause) =>
+        cause instanceof Error ? cause : new Error(String(cause)),
+    }),
+    Effect.flatMap((body) =>
+      Effect.try({
+        try: () => (body ? JSON.parse(body) : {}) as unknown,
+        catch: (error) =>
+          error instanceof Error ? error : new Error(String(error)),
       }),
-    catch: (cause) =>
-      cause instanceof Error ? cause : new Error(String(cause)),
-  });
+    ),
+  );
 
+/**
+ * Adds CORS headers to an HTTP response if CORS is enabled.
+ * Sets Access-Control-Allow-Origin, Allow-Methods, and Allow-Headers.
+ *
+ * @param res - The HTTP response object
+ * @param enableCors - Whether CORS should be enabled
+ * @param corsOrigin - The origin to allow (defaults to "*")
+ * @returns Effect that sets CORS headers (or does nothing if CORS disabled)
+ */
 export const addCorsHeaders = (
   res: ServerResponse,
   enableCors: boolean,
   corsOrigin: string = "*",
-) => {
-  if (enableCors) {
-    res.setHeader("Access-Control-Allow-Origin", corsOrigin);
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE");
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      "Content-Type, mcp-session-id",
-    );
-  }
-};
+) =>
+  pipe(
+    Match.value(enableCors),
+    Match.when(true, () =>
+      Effect.sync(() => {
+        res.setHeader("Access-Control-Allow-Origin", corsOrigin);
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE");
+        res.setHeader(
+          "Access-Control-Allow-Headers",
+          "Content-Type, mcp-session-id",
+        );
+      }),
+    ),
+    Match.orElse(() => Effect.succeed(undefined)),
+  );
 
+/**
+ * Creates and configures an MCP server instance.
+ * Registers all available tools (search, etc.) with the server.
+ *
+ * @returns Effect that resolves to a configured McpServer instance
+ * @requires AppConfig - Requires application configuration for tool setup
+ *
+ * @example
+ * ```typescript
+ * const server = yield* createMcpServer;
+ * ```
+ */
 export const createMcpServer = Effect.gen(function* (_) {
   const server = new McpServer({
     name: "web-search",
@@ -67,12 +104,21 @@ type HttpServerOptions = {
 type StreamableTransports = Record<string, StreamableHTTPServerTransport>;
 type SseTransports = Record<string, SSEServerTransport>;
 
-type Transports = {
+/**
+ * Record of all active MCP transports, organized by type.
+ * Used to track sessions for both StreamableHTTP and SSE transports.
+ */
+export type Transports = {
+  /** StreamableHTTP transports indexed by session ID */
   streamable: StreamableTransports;
+  /** SSE transports indexed by session ID */
   sse: SseTransports;
 };
 
-const missingSessionMessage = "Invalid or missing session ID";
+/**
+ * Error message used when a session ID is missing or invalid.
+ */
+export const missingSessionMessage = "Invalid or missing session ID";
 
 const connectServer = (server: McpServer, transport: SSEServerTransport) =>
   Effect.tryPromise<void, Error>({
@@ -127,7 +173,18 @@ const writeText = (res: ServerResponse, status: number, message: string) =>
     res.end(message);
   });
 
-const getHeaderValue = (headers: IncomingMessage["headers"], key: string) =>
+/**
+ * Safely extracts a header value from HTTP request headers.
+ * Handles both string and array header values, trims whitespace, and filters empty strings.
+ *
+ * @param headers - The HTTP request headers object
+ * @param key - The header name to retrieve
+ * @returns Option containing the header value if present and non-empty, or None otherwise
+ */
+export const getHeaderValue = (
+  headers: IncomingMessage["headers"],
+  key: string,
+) =>
   pipe(
     Option.fromNullable(headers[key]),
     Option.flatMap((raw) => {
@@ -140,13 +197,37 @@ const getHeaderValue = (headers: IncomingMessage["headers"], key: string) =>
     Option.filter((value) => value.length > 0),
   );
 
-const ensureStreamableTransport = (transports: Transports, sessionId: string) =>
-  Option.fromNullable(transports.streamable[sessionId]);
+/**
+ * Retrieves a StreamableHTTP transport by session ID.
+ *
+ * @param transports - The transports registry
+ * @param sessionId - The session ID to look up
+ * @returns Option containing the transport if found, or None otherwise
+ */
+export const ensureStreamableTransport = (
+  transports: Transports,
+  sessionId: string,
+) => Option.fromNullable(transports.streamable[sessionId]);
 
-const ensureSseTransport = (transports: Transports, sessionId: string) =>
+/**
+ * Retrieves an SSE transport by session ID.
+ *
+ * @param transports - The transports registry
+ * @param sessionId - The session ID to look up
+ * @returns Option containing the transport if found, or None otherwise
+ */
+export const ensureSseTransport = (transports: Transports, sessionId: string) =>
   Option.fromNullable(transports.sse[sessionId]);
 
-const requireStreamableTransport = (
+/**
+ * Retrieves a StreamableHTTP transport by session ID, or returns an error.
+ * Use this when the transport must exist for the operation to continue.
+ *
+ * @param transports - The transports registry
+ * @param sessionId - The session ID to look up
+ * @returns Either containing the transport (Right) or an error message (Left)
+ */
+export const requireStreamableTransport = (
   transports: Transports,
   sessionId: string,
 ) =>
@@ -155,7 +236,18 @@ const requireStreamableTransport = (
     () => missingSessionMessage,
   );
 
-const requireSseTransport = (transports: Transports, sessionId: string) =>
+/**
+ * Retrieves an SSE transport by session ID, or returns an error.
+ * Use this when the transport must exist for the operation to continue.
+ *
+ * @param transports - The transports registry
+ * @param sessionId - The session ID to look up
+ * @returns Either containing the transport (Right) or an error message (Left)
+ */
+export const requireSseTransport = (
+  transports: Transports,
+  sessionId: string,
+) =>
   Either.fromOption(
     ensureSseTransport(transports, sessionId),
     () => "No transport found for sessionId",
@@ -190,6 +282,50 @@ const handleStreamableInitialize = (
     return transport;
   });
 
+const createBadRequestError = (res: ServerResponse) =>
+  writeJson(res, 400, {
+    jsonrpc: "2.0",
+    error: {
+      code: -32000,
+      message: "Bad Request: No valid session ID provided",
+    },
+    id: null,
+  });
+
+const handleExistingSession = (
+  transports: Transports,
+  sessionId: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  body: unknown,
+) =>
+  pipe(
+    ensureStreamableTransport(transports, sessionId),
+    Option.match({
+      onSome: (transport) => handleTransportRequest(transport, req, res, body),
+      onNone: () => createBadRequestError(res),
+    }),
+  );
+
+const handleMissingSession = (
+  server: McpServer,
+  transports: Transports,
+  req: IncomingMessage,
+  res: ServerResponse,
+  body: unknown,
+) =>
+  pipe(
+    Match.value(isInitializeRequest(body)),
+    Match.when(true, () =>
+      handleStreamableInitialize(server, transports).pipe(
+        Effect.flatMap((transport) =>
+          handleTransportRequest(transport, req, res, body),
+        ),
+      ),
+    ),
+    Match.orElse(() => createBadRequestError(res)),
+  );
+
 const handlePostMcp = (
   server: McpServer,
   transports: Transports,
@@ -204,40 +340,8 @@ const handlePostMcp = (
       sessionIdOption,
       Option.match({
         onSome: (sessionId) =>
-          pipe(
-            ensureStreamableTransport(transports, sessionId),
-            Option.match({
-              onSome: (transport) =>
-                handleTransportRequest(transport, req, res, body),
-              onNone: () =>
-                writeJson(res, 400, {
-                  jsonrpc: "2.0",
-                  error: {
-                    code: -32000,
-                    message: "Bad Request: No valid session ID provided",
-                  },
-                  id: null,
-                }),
-            }),
-          ),
-        onNone: () => {
-          if (!isInitializeRequest(body)) {
-            return writeJson(res, 400, {
-              jsonrpc: "2.0",
-              error: {
-                code: -32000,
-                message: "Bad Request: No valid session ID provided",
-              },
-              id: null,
-            });
-          }
-
-          return handleStreamableInitialize(server, transports).pipe(
-            Effect.flatMap((transport) =>
-              handleTransportRequest(transport, req, res, body),
-            ),
-          );
-        },
+          handleExistingSession(transports, sessionId, req, res, body),
+        onNone: () => handleMissingSession(server, transports, req, res, body),
       }),
     );
 
@@ -381,50 +485,64 @@ const handleHttpRequest = (
       Option.getOrElse(() => "GET"),
     );
 
+    yield* _(addCorsHeaders(res, options.enableCors, options.corsOrigin));
+
     yield* _(
-      Effect.sync(() =>
-        addCorsHeaders(res, options.enableCors, options.corsOrigin),
+      pipe(
+        Match.value({ method, pathname }),
+        Match.when(
+          ({ method }) => method === "OPTIONS",
+          () =>
+            Effect.sync(() => {
+              res.writeHead(204);
+              res.end();
+            }),
+        ),
+        Match.when(
+          ({ method, pathname }) => method === "POST" && pathname === "/mcp",
+          () => handlePostMcp(server, transports, req, res),
+        ),
+        Match.when(
+          ({ method, pathname }) => method === "GET" && pathname === "/mcp",
+          () => handleGetMcp(transports, req, res),
+        ),
+        Match.when(
+          ({ method, pathname }) => method === "DELETE" && pathname === "/mcp",
+          () => handleDeleteMcp(transports, req, res),
+        ),
+        Match.when(
+          ({ method, pathname }) => method === "GET" && pathname === "/sse",
+          () => handleGetSse(server, transports, req, res),
+        ),
+        Match.when(
+          ({ method, pathname }) =>
+            method === "POST" && pathname === "/messages",
+          () => handlePostMessages(transports, req, res, url),
+        ),
+        Match.orElse(() => handleUnknownRoute(res)),
       ),
     );
-
-    if (method === "OPTIONS") {
-      yield* _(
-        Effect.sync(() => {
-          res.writeHead(204);
-          res.end();
-        }),
-      );
-      return;
-    }
-
-    if (method === "POST" && pathname === "/mcp") {
-      yield* _(handlePostMcp(server, transports, req, res));
-      return;
-    }
-
-    if (method === "GET" && pathname === "/mcp") {
-      yield* _(handleGetMcp(transports, req, res));
-      return;
-    }
-
-    if (method === "DELETE" && pathname === "/mcp") {
-      yield* _(handleDeleteMcp(transports, req, res));
-      return;
-    }
-
-    if (method === "GET" && pathname === "/sse") {
-      yield* _(handleGetSse(server, transports, req, res));
-      return;
-    }
-
-    if (method === "POST" && pathname === "/messages") {
-      yield* _(handlePostMessages(transports, req, res, url));
-      return;
-    }
-
-    yield* _(handleUnknownRoute(res));
   });
 
+/**
+ * Creates an HTTP server for MCP communication.
+ * Supports both StreamableHTTP and SSE transports.
+ * Handles multiple endpoints: /mcp (StreamableHTTP), /sse and /messages (SSE).
+ * Includes CORS support and automatic error handling.
+ *
+ * @param server - The configured MCP server instance
+ * @param options - Optional HTTP server configuration (CORS settings)
+ * @returns Effect that resolves to a Node.js HTTP Server instance
+ *
+ * @example
+ * ```typescript
+ * const httpServer = yield* createHttpServer(mcpServer, {
+ *   enableCors: true,
+ *   corsOrigin: "*"
+ * });
+ * httpServer.listen(3000);
+ * ```
+ */
 export const createHttpServer = (
   server: McpServer,
   options: HttpServerOptions = {},

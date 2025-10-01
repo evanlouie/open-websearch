@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
-import { Effect, pipe } from "effect";
+import { Effect, Match, Option, pipe } from "effect";
+import * as Arr from "effect/Array";
 import * as List from "effect/List";
 import { SearchEngineError, type SearchResult } from "../types.js";
 import { getConfig, type AppConfig } from "../config.js";
@@ -43,37 +44,112 @@ const fetchResults = (query: string, page: number) =>
       ),
   });
 
+/**
+ * Parses a single Bing search result element into a SearchResult object.
+ * Extracts title, URL, description, and source from the HTML element.
+ *
+ * @param element - The cheerio Element to parse (should be a search result item)
+ * @param $ - The cheerio instance used for DOM traversal
+ * @returns Option containing the parsed SearchResult, or None if parsing fails
+ */
+export const parseResultElement = (
+  element: cheerio.Element,
+  $: ReturnType<typeof cheerio.load>,
+): Option.Option<SearchResult> => {
+  const titleElement = $(element).find("h2");
+  const linkElement = $(element).find("a");
+  const snippetElement = $(element).find("p").first();
+
+  return pipe(
+    Option.fromNullable(linkElement.attr("href")),
+    Option.filter((url) => url.startsWith("http")),
+    Option.filter(() => titleElement.length > 0 && linkElement.length > 0),
+    Option.map((url) => {
+      const sourceElement = $(element).find(".b_tpcn");
+      return {
+        title: titleElement.text(),
+        url,
+        description: snippetElement.text().trim() || "",
+        source: sourceElement.text().trim() || "",
+        engine: "bing" as const,
+      };
+    }),
+  );
+};
+
 const parseResults = (html: string): SearchResult[] => {
   const $ = cheerio.load(html);
-  const results: SearchResult[] = [];
-
-  $("#b_content")
+  const elements = $("#b_content")
     .children()
     .find("#b_results")
     .children()
-    .each((_, element) => {
-      const titleElement = $(element).find("h2");
-      const linkElement = $(element).find("a");
-      const snippetElement = $(element).find("p").first();
+    .toArray();
 
-      if (titleElement.length && linkElement.length) {
-        const url = linkElement.attr("href");
-        if (url && url.startsWith("http")) {
-          const sourceElement = $(element).find(".b_tpcn");
-          results.push({
-            title: titleElement.text(),
-            url,
-            description: snippetElement.text().trim() || "",
-            source: sourceElement.text().trim() || "",
-            engine: "bing",
-          });
-        }
-      }
-    });
-
-  return results;
+  return pipe(
+    Arr.fromIterable(elements),
+    Arr.filterMap((el) => parseResultElement(el, $)),
+  );
 };
 
+const fetchPage = (
+  query: string,
+  page: number,
+  accumulatedResults: List.List<SearchResult>,
+  limit: number,
+): Effect.Effect<List.List<SearchResult>, SearchEngineError, AppConfig> =>
+  pipe(
+    Match.value(List.size(accumulatedResults) >= limit),
+    Match.when(true, () => Effect.succeed(accumulatedResults)),
+    Match.orElse(() =>
+      Effect.gen(function* (_) {
+        const response = yield* _(fetchResults(query, page));
+        const pageResults = yield* _(
+          Effect.sync(() => parseResults(response.data)),
+        );
+
+        const pageResultsList = List.fromIterable(pageResults);
+        const pageResultsCount = List.size(pageResultsList);
+
+        const updatedResults = pipe(
+          accumulatedResults,
+          List.appendAll(pageResultsList),
+        );
+
+        return yield* _(
+          pipe(
+            Match.value(pageResultsCount),
+            Match.when(0, () =>
+              Effect.logWarning(
+                "⚠️ Bing returned no additional Bing results, ending early.",
+              ).pipe(
+                Effect.annotateLogs({ engine: "bing", query }),
+                Effect.as(updatedResults),
+              ),
+            ),
+            Match.orElse(() =>
+              fetchPage(query, page + 1, updatedResults, limit),
+            ),
+          ),
+        );
+      }),
+    ),
+  );
+
+/**
+ * Searches Bing for the given query and returns up to `limit` results.
+ * Fetches multiple pages if needed to satisfy the limit.
+ * Results are scraped from Bing's HTML search results pages.
+ *
+ * @param query - The search query string
+ * @param limit - Maximum number of results to return
+ * @returns Effect that resolves to an array of SearchResults, or fails with SearchEngineError
+ * @requires AppConfig - Requires application configuration from Effect context
+ *
+ * @example
+ * ```typescript
+ * const results = yield* searchBing("typescript effect", 10);
+ * ```
+ */
 export const searchBing = (
   query: string,
   limit: number,
@@ -81,33 +157,7 @@ export const searchBing = (
   Effect.gen(function* (_) {
     yield* _(getConfig);
 
-    let allResults = List.empty<SearchResult>();
-    let collected = 0;
-    let page = 0;
+    const results = yield* _(fetchPage(query, 0, List.empty(), limit));
 
-    while (collected < limit) {
-      const response = yield* _(fetchResults(query, page));
-      const pageResults = yield* _(
-        Effect.sync(() => parseResults(response.data)),
-      );
-
-      const pageResultsList = List.fromIterable(pageResults);
-      const pageResultsCount = List.size(pageResultsList);
-
-      allResults = pipe(allResults, List.appendAll(pageResultsList));
-      collected += pageResultsCount;
-
-      if (pageResultsCount === 0) {
-        yield* _(
-          Effect.logWarning(
-            "⚠️ Bing returned no additional Bing results, ending early.",
-          ).pipe(Effect.annotateLogs({ engine: "bing", query })),
-        );
-        break;
-      }
-
-      page += 1;
-    }
-
-    return pipe(allResults, List.take(limit), List.toArray);
+    return pipe(results, List.take(limit), List.toArray);
   });

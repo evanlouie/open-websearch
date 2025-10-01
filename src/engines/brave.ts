@@ -1,15 +1,23 @@
 import axios, { AxiosRequestConfig } from "axios";
 import * as cheerio from "cheerio";
-import { Effect, Option, pipe } from "effect";
+import { Effect, Match, Option, pipe } from "effect";
+import * as Arr from "effect/Array";
 import * as List from "effect/List";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { getProxyUrl, type AppConfig } from "../config.js";
 import { SearchEngineError, type SearchResult } from "../types.js";
 
-const createRequestOptions = (
+/**
+ * Creates axios request options with appropriate headers for Brave search.
+ * If a proxy URL is provided, configures HTTP/HTTPS agents to use the proxy.
+ *
+ * @param proxyUrl - Optional proxy URL to use for the request
+ * @returns Axios request configuration with headers and optional proxy agents
+ */
+export const createRequestOptions = (
   proxyUrl: Option.Option<string>,
 ): AxiosRequestConfig => {
-  const options: AxiosRequestConfig = {
+  const baseOptions: AxiosRequestConfig = {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
@@ -31,19 +39,20 @@ const createRequestOptions = (
     },
   };
 
-  pipe(
+  return pipe(
     proxyUrl,
     Option.match({
-      onNone: () => undefined,
+      onNone: () => baseOptions,
       onSome: (url) => {
         const proxyAgent = new HttpsProxyAgent(url);
-        options.httpAgent = proxyAgent;
-        options.httpsAgent = proxyAgent;
+        return {
+          ...baseOptions,
+          httpAgent: proxyAgent,
+          httpsAgent: proxyAgent,
+        };
       },
     }),
   );
-
-  return options;
 };
 
 const fetchResults = (
@@ -65,35 +74,111 @@ const fetchResults = (
       ),
   });
 
-const parseResults = (html: string): SearchResult[] => {
-  const $ = cheerio.load(html);
-  const results: SearchResult[] = [];
+/**
+ * Parses a single Brave search result element into a SearchResult object.
+ * Extracts title, URL, description, and source from the HTML element.
+ *
+ * @param element - The cheerio Element to parse (should be a .snippet element)
+ * @param $ - The cheerio instance used for DOM traversal
+ * @returns Option containing the parsed SearchResult, or None if required fields are missing
+ */
+export const parseResultElement = (
+  element: cheerio.Element,
+  $: ReturnType<typeof cheerio.load>,
+): Option.Option<SearchResult> => {
+  const resultElement = $(element);
+  const title = resultElement.find(".title").text().trim();
+  const url = resultElement.find("a.heading-serpresult").attr("href");
+  const description = resultElement.find(".snippet-description").text().trim();
+  const source = resultElement.find(".sitename").text().trim();
 
-  const resultsContainer = $("#results");
-  resultsContainer.find(".snippet").each((_, element) => {
-    const resultElement = $(element);
-    const title = resultElement.find(".title").text().trim();
-    const url = resultElement.find("a.heading-serpresult").attr("href");
-    const description = resultElement
-      .find(".snippet-description")
-      .text()
-      .trim();
-    const source = resultElement.find(".sitename").text().trim();
-
-    if (title && url) {
-      results.push({
+  return title && url
+    ? Option.some({
         title,
         url,
         description,
         source,
-        engine: "brave",
-      });
-    }
-  });
-
-  return results;
+        engine: "brave" as const,
+      })
+    : Option.none();
 };
 
+const parseResults = (html: string): SearchResult[] => {
+  const $ = cheerio.load(html);
+  const elements = $("#results").find(".snippet").toArray();
+
+  return pipe(
+    Arr.fromIterable(elements),
+    Arr.filterMap((el) => parseResultElement(el, $)),
+  );
+};
+
+const fetchPage = (
+  query: string,
+  offset: number,
+  accumulatedResults: List.List<SearchResult>,
+  limit: number,
+  requestOptions: AxiosRequestConfig,
+): Effect.Effect<List.List<SearchResult>, SearchEngineError, AppConfig> =>
+  pipe(
+    Match.value(List.size(accumulatedResults) >= limit),
+    Match.when(true, () => Effect.succeed(accumulatedResults)),
+    Match.orElse(() =>
+      Effect.gen(function* (_) {
+        const response = yield* _(fetchResults(query, offset, requestOptions));
+        const pageResults = yield* _(
+          Effect.sync(() => parseResults(response.data)),
+        );
+
+        const pageResultsList = List.fromIterable(pageResults);
+        const pageResultsCount = List.size(pageResultsList);
+
+        const updatedResults = pipe(
+          accumulatedResults,
+          List.appendAll(pageResultsList),
+        );
+
+        return yield* _(
+          pipe(
+            Match.value(pageResultsCount),
+            Match.when(0, () =>
+              Effect.logWarning(
+                "⚠️ Brave returned no additional Brave results, ending early.",
+              ).pipe(
+                Effect.annotateLogs({ engine: "brave", query }),
+                Effect.as(updatedResults),
+              ),
+            ),
+            Match.orElse(() =>
+              fetchPage(
+                query,
+                offset + 1,
+                updatedResults,
+                limit,
+                requestOptions,
+              ),
+            ),
+          ),
+        );
+      }),
+    ),
+  );
+
+/**
+ * Searches Brave Search for the given query and returns up to `limit` results.
+ * Fetches multiple pages if needed to satisfy the limit.
+ * Results are scraped from Brave Search's HTML search results pages.
+ *
+ * @param query - The search query string
+ * @param limit - Maximum number of results to return
+ * @returns Effect that resolves to an array of SearchResults, or fails with SearchEngineError
+ * @requires AppConfig - Requires application configuration from Effect context
+ *
+ * @example
+ * ```typescript
+ * const results = yield* searchBrave("web scraping best practices", 10);
+ * ```
+ */
 export const searchBrave = (
   query: string,
   limit: number,
@@ -102,33 +187,9 @@ export const searchBrave = (
     const proxyUrl = yield* _(getProxyUrl());
     const requestOptions = createRequestOptions(proxyUrl);
 
-    let allResults = List.empty<SearchResult>();
-    let collected = 0;
-    let offset = 0;
+    const results = yield* _(
+      fetchPage(query, 0, List.empty(), limit, requestOptions),
+    );
 
-    while (collected < limit) {
-      const response = yield* _(fetchResults(query, offset, requestOptions));
-      const pageResults = yield* _(
-        Effect.sync(() => parseResults(response.data)),
-      );
-
-      const pageResultsList = List.fromIterable(pageResults);
-      const pageResultsCount = List.size(pageResultsList);
-
-      allResults = pipe(allResults, List.appendAll(pageResultsList));
-      collected += pageResultsCount;
-
-      if (pageResultsCount === 0) {
-        yield* _(
-          Effect.logWarning(
-            "⚠️ Brave returned no additional Brave results, ending early.",
-          ).pipe(Effect.annotateLogs({ engine: "brave", query })),
-        );
-        break;
-      }
-
-      offset += 1;
-    }
-
-    return pipe(allResults, List.take(limit), List.toArray);
+    return pipe(results, List.take(limit), List.toArray);
   });

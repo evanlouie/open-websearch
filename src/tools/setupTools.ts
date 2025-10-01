@@ -1,4 +1,4 @@
-import { Effect, Option, pipe } from "effect";
+import { Cause, Effect, Exit, Option, pipe } from "effect";
 import * as Arr from "effect/Array";
 import * as Chunk from "effect/Chunk";
 import * as Stream from "effect/Stream";
@@ -238,6 +238,22 @@ const buildSearchDescription = (config: AppConfig): string => {
   );
 };
 
+/**
+ * Registers all MCP tools with the server.
+ * Currently registers the "search" tool which supports multi-engine, multi-query web searches.
+ * The tool configuration is dynamically built based on the application config
+ * (allowed engines, default engine, etc.).
+ *
+ * @param server - The MCP server instance to register tools with
+ * @returns Effect that completes after tools are registered
+ * @requires AppConfig - Requires application configuration from Effect context
+ *
+ * @example
+ * ```typescript
+ * const server = new McpServer({ name: "web-search", version: "1.0.0" });
+ * yield* setupTools(server);
+ * ```
+ */
 export const setupTools = (server: McpServer) =>
   Effect.gen(function* (_) {
     const config = yield* _(getConfig);
@@ -307,44 +323,44 @@ export const setupTools = (server: McpServer) =>
               config,
             ).pipe(Effect.provide(StderrLoggerLayer));
 
-            try {
-              const results = await Effect.runPromise(effect);
+            const exit = await Effect.runPromiseExit(effect);
 
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: JSON.stringify({ results }, null, 2),
-                  },
-                ],
-                structuredContent: { results },
-              };
-            } catch (error) {
-              const message =
-                error instanceof Error ? error.message : "Unknown error";
-              await Effect.runPromise(
-                Effect.logError("Search tool execution failed.").pipe(
-                  Effect.annotateLogs({
-                    error: message,
-                    stack:
-                      error instanceof Error && error.stack
-                        ? error.stack
-                        : undefined,
-                  }),
-                  Effect.provide(StderrLoggerLayer),
-                ),
-              );
+            return await pipe(
+              exit,
+              Exit.match({
+                onFailure: async (cause) => {
+                  const message = Cause.pretty(cause);
+                  await Effect.runPromise(
+                    Effect.logError("Search tool execution failed.").pipe(
+                      Effect.annotateLogs({
+                        error: message,
+                        cause: Cause.pretty(cause),
+                      }),
+                      Effect.provide(StderrLoggerLayer),
+                    ),
+                  );
 
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: `Search failed: ${message}`,
-                  },
-                ],
-                isError: true,
-              };
-            }
+                  return {
+                    content: [
+                      {
+                        type: "text",
+                        text: `Search failed: ${message}`,
+                      },
+                    ],
+                    isError: true,
+                  };
+                },
+                onSuccess: (results) => ({
+                  content: [
+                    {
+                      type: "text",
+                      text: JSON.stringify({ results }, null, 2),
+                    },
+                  ],
+                  structuredContent: { results },
+                }),
+              }),
+            );
           },
         );
       }),

@@ -105,18 +105,20 @@ Key configuration variables:
 
 ### Search Engine Architecture
 
-Each search engine is implemented as a separate module in `src/engines/[engine-name]/`:
+Each search engine is implemented as a separate module in `src/engines/[engine-name].ts`:
 
 - **Search function**: Scrapes search results using axios + cheerio wrapped in an Effect
-- **index.ts**: Exports public API for the engine
+- **Helper functions**: Small, composable pure functions exported for testing
+- **Comprehensive unit tests**: Each engine has `[engine-name].test.ts` with extensive coverage
 
 Search engines use web scraping to extract structured data:
 
 - Parse HTML using cheerio
-- Extract titles, URLs, descriptions from search result pages
+- Extract titles, URLs, descriptions from search result pages via pure helper functions
 - Handle pagination when needed
 - Return standardized `SearchResult` objects wrapped in `Effect`
 - Surface scraper failures through `SearchEngineError`
+- All parsing logic is testable and uses functional composition
 
 ### Type Definitions
 
@@ -171,16 +173,32 @@ When HTTP mode is enabled:
 
 ## Testing
 
-### Integration Tests
+The project has **106 tests** with comprehensive coverage of both unit and integration scenarios.
 
-The project includes comprehensive integration tests in `src/__tests__/`:
+### Test Organization
 
-- HTTP server tests covering all endpoints and modes
-- CORS functionality tests
-- Session management tests
-- Error handling tests
+**File Naming Convention:**
 
-Run tests with:
+- `*.test.ts` - Unit tests for pure functions (no network/IO/servers)
+- `*.integration.test.ts` - Integration tests (HTTP servers, network calls, external systems)
+
+**Test Coverage (106 tests total):**
+
+**Unit Tests (83 tests):**
+
+- `src/engines/bing.test.ts` - 10 tests for parseResultElement
+- `src/engines/brave.test.ts` - 13 tests for parseResultElement and createRequestOptions
+- `src/engines/duckduckgo.test.ts` - 39 tests for 8 helper functions (extractPreloadUrl, parseJsonData, etc.)
+- `src/server.unit.test.ts` - 21 tests for server helper functions (getHeaderValue, transport lookups, etc.)
+
+**Integration Tests (23 tests):**
+
+- `src/server.integration.test.ts` - HTTP server endpoints, CORS, sessions, error handling
+- `src/tools/setupTools.integration.test.ts` - MCP server creation, multi-query functionality
+
+Pure functions are exported from source files for unit testing.
+
+Run all tests with:
 
 ```bash
 bun test
@@ -212,7 +230,8 @@ The project MUST maintain:
 - ✅ Zero TypeScript errors in strict mode (`strict: true` in tsconfig.json)
 - ✅ Zero `any` types in source code (use `unknown`, proper interfaces, or type guards)
 - ✅ Zero TypeScript suppressions (`@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`)
-- ✅ All integration tests passing (22+ tests covering HTTP endpoints, CORS, sessions, errors, multi-query)
+- ✅ Zero `try/catch` blocks in source code (use Effect/Either error handling)
+- ✅ All 106 tests passing (83 unit tests + 23 integration tests)
 - ✅ README.md kept up-to-date with all features and usage examples
 
 ### Code Style Notes
@@ -221,16 +240,40 @@ The project MUST maintain:
 - Nest matches sparingly; when stepping into a nested match, open a fresh `pipe` scoped to the new value (for example `pipe(Match.value(cfg.enableCors), ...)`).
 - When a match handler performs updates, return explicitly from the handler and keep mutable writes localized.
 
+**Error Handling Rules:**
+
+- **NEVER use `try/catch` blocks in source code** - This is strictly prohibited
+- Use Effect/Either for all error handling:
+  - `Effect.try({ try: ..., catch: ... })` for synchronous operations that may throw
+  - `Effect.tryPromise({ try: ..., catch: ... })` for Promise-based operations
+  - `Either.try({ try: ..., catch: ... })` for pure functions returning Either
+  - `Effect.flatMap` to chain error-prone operations in Effect pipelines
+- At Effect boundaries (e.g., MCP SDK callbacks that expect Promises):
+  - Use `Effect.runPromiseExit` + `Exit.match` instead of try/catch around `Effect.runPromise`
+  - Use `Cause.pretty(cause)` for error formatting in `onFailure` handlers
+- JSON parsing: Use `Effect.try` or `Either.try`, never raw try/catch
+- Example of proper error handling at boundaries:
+  ```typescript
+  const exit = await Effect.runPromiseExit(effect);
+  return pipe(
+    exit,
+    Exit.match({
+      onFailure: (cause) => handleError(Cause.pretty(cause)),
+      onSuccess: (value) => handleSuccess(value),
+    }),
+  );
+  ```
+
 **Type Safety Guidelines:**
 
 - Use `AxiosRequestConfig` for axios request options instead of `any`
 - Use `unknown` for JSON parsing results, not `any`
-- Use `error instanceof Error` checks in catch blocks
 - Define interfaces for external API responses (e.g., `DuckDuckGoSearchItem`)
-- Use type guards (`axios.isAxiosError()`) for error handling
-- Model optional data with `Effect.Option` rather than `null` / `undefined`
-- Represent recoverable failures with `Effect.Either` instead of `throw`
+- Use type guards when needed for narrowing types
+- Model optional data with `Option` rather than `null` / `undefined`
+- Represent recoverable failures with `Either` or typed Effect errors instead of throwing
 - Reach for `effect/Array`, `effect/List`, and `effect/Stream` helpers before manual loops so collection logic stays effect-aware and immutable
+- In error handlers: use `error instanceof Error` to narrow types when converting unknown errors to domain errors
 
 ## Important Notes
 

@@ -10,8 +10,16 @@ import {
 } from "effect";
 import * as Arr from "effect/Array";
 
+/**
+ * Array of all supported search engine identifiers.
+ * These engines can be used for web searches without requiring API keys.
+ */
 export const supportedSearchEngines = ["bing", "duckduckgo", "brave"] as const;
 
+/**
+ * Union type representing a supported search engine.
+ * Can be one of: "bing", "duckduckgo", or "brave".
+ */
 export type SupportedEngine = (typeof supportedSearchEngines)[number];
 
 const isSupportedEngine = (engine: string): engine is SupportedEngine =>
@@ -29,8 +37,22 @@ const AppConfigSchema = Schema.Struct({
   enableHttpServer: Schema.Boolean,
 });
 
+/**
+ * Application configuration type decoded from environment variables.
+ * Includes settings for search engines, proxy, CORS, and server mode.
+ */
 export type AppConfig = Schema.Schema.Type<typeof AppConfigSchema>;
 
+/**
+ * Effect Context Tag for accessing the application configuration.
+ * Use this to retrieve the AppConfig in Effect programs.
+ *
+ * @example
+ * ```typescript
+ * const config = yield* AppConfigTag;
+ * console.log(config.defaultSearchEngine);
+ * ```
+ */
 export const AppConfigTag = Context.GenericTag<AppConfig>("AppConfig");
 
 const readEnv = Effect.sync(() => ({ ...process.env }));
@@ -134,7 +156,9 @@ const buildConfigEffect = Effect.gen(function* (_) {
     Option.map((engine) => engine.trim()),
     Option.filter((engine) => engine.length > 0),
   );
-  let defaultSearchEngine = normalizeDefaultEngine(defaultSearchEngineOption);
+  const initialDefaultEngine = normalizeDefaultEngine(
+    defaultSearchEngineOption,
+  );
 
   const rawAllowed = parseAllowedEngines(
     pipe(
@@ -180,33 +204,32 @@ const buildConfigEffect = Effect.gen(function* (_) {
     Match.orElse(() => [] as SupportedEngine[]),
   );
 
-  yield* _(
+  const defaultSearchEngine = yield* _(
     pipe(
-      Match.value({ allowedSearchEngines, defaultSearchEngine }),
+      Match.value({ allowedSearchEngines, initialDefaultEngine }),
       Match.when(
-        ({ allowedSearchEngines, defaultSearchEngine }) =>
+        ({ allowedSearchEngines, initialDefaultEngine }) =>
           Arr.isNonEmptyReadonlyArray(allowedSearchEngines) &&
           !pipe(
             allowedSearchEngines,
-            Arr.some((engine) => engine === defaultSearchEngine),
+            Arr.some((engine) => engine === initialDefaultEngine),
           ),
-        ({ allowedSearchEngines, defaultSearchEngine }) => {
+        ({ allowedSearchEngines, initialDefaultEngine }) => {
           const updatedDefault = allowedSearchEngines[0]!;
           return Effect.logWarning(
             "Default search engine is not included in allowed list. Switching to first allowed engine.",
           ).pipe(
             Effect.annotateLogs({
-              previousDefault: defaultSearchEngine,
+              previousDefault: initialDefaultEngine,
               newDefault: updatedDefault,
             }),
-            Effect.map(() => {
-              defaultSearchEngine = updatedDefault;
-              return undefined;
-            }),
+            Effect.as(updatedDefault),
           );
         },
       ),
-      Match.orElse(() => Effect.succeed(undefined)),
+      Match.orElse(({ initialDefaultEngine }) =>
+        Effect.succeed(initialDefaultEngine),
+      ),
     ),
   );
 
@@ -346,10 +369,52 @@ const buildConfigEffect = Effect.gen(function* (_) {
   return config;
 });
 
+/**
+ * Effect Layer that provides the application configuration.
+ * Reads and validates environment variables, then provides AppConfig to the Effect runtime.
+ * This layer should be provided to the main Effect program.
+ *
+ * @example
+ * ```typescript
+ * const program = Effect.gen(function* () {
+ *   const config = yield* getConfig;
+ *   // ... use config
+ * }).pipe(Effect.provide(AppConfigLayer));
+ * ```
+ */
 export const AppConfigLayer = Layer.effect(AppConfigTag, buildConfigEffect);
 
+/**
+ * Effect accessor for retrieving the application configuration.
+ * Equivalent to using AppConfigTag directly in Effect.gen.
+ *
+ * @returns Effect that provides the current AppConfig
+ *
+ * @example
+ * ```typescript
+ * const config = yield* getConfig;
+ * ```
+ */
 export const getConfig = AppConfigTag;
 
+/**
+ * Retrieves the proxy URL from the configuration if proxy is enabled.
+ * Returns an Option containing the encoded proxy URL, or None if proxy is disabled.
+ *
+ * @returns Effect that resolves to Option<string> containing the proxy URL if enabled
+ *
+ * @example
+ * ```typescript
+ * const proxyUrl = yield* getProxyUrl();
+ * pipe(
+ *   proxyUrl,
+ *   Option.match({
+ *     onSome: (url) => console.log("Using proxy:", url),
+ *     onNone: () => console.log("Proxy disabled"),
+ *   })
+ * );
+ * ```
+ */
 export const getProxyUrl = () =>
   Effect.map(getConfig, (config) =>
     config.useProxy
