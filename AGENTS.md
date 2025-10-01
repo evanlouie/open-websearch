@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Open-WebSearch is a Model Context Protocol (MCP) server that provides multi-engine web search capabilities without requiring API keys. It scrapes search results from various engines (Bing, Baidu, DuckDuckGo, Exa, Brave, CSDN, Juejin) and provides article content fetching for specific platforms.
+Open-WebSearch is a Model Context Protocol (MCP) server that provides multi-engine web search capabilities without requiring API keys. It scrapes search results from various engines (Bing, DuckDuckGo, Brave).
 
 **Repository:** https://github.com/Aas-ee/open-webSearch
 
@@ -111,19 +111,13 @@ Key configuration variables:
 
 - **`src/tools/setupTools.ts`**: Registers all MCP tools with the server
   - `search`: Multi-engine web search
-  - `fetchLinuxDoArticle`: Extract Linux.do forum articles
-  - `fetchCsdnArticle`: Extract CSDN blog articles
-  - `fetchGithubReadme`: Extract GitHub repository README files
-  - `fetchJuejinArticle`: Extract Juejin (掘金) articles
   - Handles search result distribution across multiple engines
-  - Validates URLs for article fetching tools
 
 ### Search Engine Architecture
 
 Each search engine is implemented as a separate module in `src/engines/[engine-name]/`:
 
 - **Search function**: Scrapes search results using axios + cheerio
-- **Article fetching** (optional): Extracts full article content for specific platforms
 - **index.ts**: Exports public API for the engine
 
 Search engines use web scraping to extract structured data:
@@ -175,14 +169,6 @@ When HTTP mode is enabled:
 4. Update `src/config.ts` type if needed (AppConfig['defaultSearchEngine'])
 5. Update README documentation
 
-## Adding a New Article Fetcher
-
-1. Create fetcher in `src/engines/[platform]/fetch[Platform]Article.ts`
-2. Register tool in `src/tools/setupTools.ts`:
-   - Add URL validation logic to `validateArticleUrl()`
-   - Register tool with `server.tool()`
-3. Update README usage documentation
-
 ## Testing
 
 ### Integration Tests
@@ -205,7 +191,6 @@ bun test
 Manual testing can be done by running individual engine test files in `src/test/`:
 
 - `test-bing.ts`, `test-baidu.ts`, `test-duckduckgo.ts`, etc.
-- `fetchCsdnArticleTests.ts`, `fetchJuejinArticleTests.ts`
 
 These are standalone test scripts that directly import and test engine functions.
 
@@ -213,12 +198,13 @@ These are standalone test scripts that directly import and test engine functions
 
 **IMPORTANT:** After making any code changes:
 
-1. Ensure all relevant documentation is updated so it stays accurate.
-2. Run `bunx tsc --noEmit` and confirm it passes with zero errors.
-3. Run `bun run typecheck` to ensure TypeScript strict mode compliance.
-4. Run `bun test` to verify all tests pass.
-5. Run `bunx prettier --write .` to keep formatting consistent.
-6. Test the affected functionality manually if needed.
+1. **Always remove old/stale code** - Delete unused functions, commented-out code, deprecated implementations, and dead code paths. Keep the codebase clean and maintainable.
+2. Ensure all relevant documentation is updated so it stays accurate.
+3. Run `bunx tsc --noEmit` and confirm it passes with zero errors.
+4. Run `bun run typecheck` to ensure TypeScript strict mode compliance.
+5. Run `bun test` to verify all tests pass.
+6. Run `bunx prettier --write .` to keep formatting consistent.
+7. Test the affected functionality manually if needed.
 
 The project MUST maintain:
 

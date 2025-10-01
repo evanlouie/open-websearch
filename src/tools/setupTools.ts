@@ -1,15 +1,11 @@
 // tools/setupTools.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { fetchLinuxDoArticle } from "../engines/linuxdo/fetchLinuxDoArticle.js";
 import { searchBing } from "../engines/bing/bing.js";
-import { fetchCsdnArticle } from "../engines/csdn/fetchCsdnArticle.js";
 import { SearchResult } from "../types.js";
 import { z } from "zod";
 import { searchDuckDuckGo } from "../engines/duckduckgo/index.js";
 import { config } from "../config.js";
 import { searchBrave } from "../engines/brave/index.js";
-import { fetchGithubReadme } from "../engines/github/index.js";
-import { fetchJuejinArticle } from "../engines/juejin/fetchJuejinArticle.js";
 
 // Supported search engines
 const SUPPORTED_ENGINES = ["bing", "duckduckgo", "brave"] as const;
@@ -79,62 +75,6 @@ const executeSearch = async (
   }
 };
 
-// Validate article URL
-const validateArticleUrl = (
-  url: string,
-  type: "linuxdo" | "csdn" | "juejin",
-): boolean => {
-  try {
-    const urlObj = new URL(url);
-
-    switch (type) {
-      case "linuxdo":
-        return urlObj.hostname === "linux.do" && url.includes(".json");
-      case "csdn":
-        return (
-          urlObj.hostname === "blog.csdn.net" &&
-          url.includes("/article/details/")
-        );
-      case "juejin":
-        return urlObj.hostname === "juejin.cn" && url.includes("/post/");
-      default:
-        return false;
-    }
-  } catch {
-    return false;
-  }
-};
-
-// Validate GitHub URL
-const validateGithubUrl = (url: string): boolean => {
-  try {
-    const isSshGithub = /^git@github\.com:/.test(url);
-
-    if (isSshGithub) {
-      // SSH format: git@github.com:owner/repo.git
-      return /^git@github\.com:[^\/]+\/[^\/]+/.test(url);
-    }
-
-    const urlObj = new URL(url);
-
-    // Support multiple GitHub URL formats
-    const isHttpsGithub =
-      urlObj.hostname === "github.com" || urlObj.hostname === "www.github.com";
-
-    if (isHttpsGithub) {
-      // Check path format: /owner/repo
-      const pathParts = urlObj.pathname
-        .split("/")
-        .filter((part) => part.length > 0);
-      return pathParts.length >= 2;
-    }
-
-    return false;
-  } catch {
-    return false;
-  }
-};
-
 export const setupTools = (server: McpServer): void => {
   // Search tool
   // Generate dynamic description for search tool
@@ -143,14 +83,7 @@ export const setupTools = (server: McpServer): void => {
       return "Search the web using Bing, Brave, or DuckDuckGo (no API key required)";
     } else {
       const enginesText = config.allowedSearchEngines
-        .map((e) => {
-          switch (e) {
-            case "juejin":
-              return "Juejin(掘金)";
-            default:
-              return e.charAt(0).toUpperCase() + e.slice(1);
-          }
-        })
+        .map((e) => e.charAt(0).toUpperCase() + e.slice(1))
         .join(", ");
       return `Search the web using these engines: ${enginesText} (no API key required)`;
     }
@@ -224,182 +157,6 @@ export const setupTools = (server: McpServer): void => {
             {
               type: "text",
               text: `Search failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  // Linux.do article fetching tool
-  server.tool(
-    "fetchLinuxDoArticle",
-    "Fetch full article content from a linux.do post URL",
-    {
-      url: z
-        .string()
-        .url()
-        .refine(
-          (url) => validateArticleUrl(url, "linuxdo"),
-          "URL must be from linux.do and end with .json",
-        ),
-    },
-    async ({ url }) => {
-      try {
-        console.error(`Fetching Linux.do article: ${url}`);
-        const result = await fetchLinuxDoArticle(url);
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: result.content,
-            },
-          ],
-        };
-      } catch (error) {
-        console.error("Failed to fetch Linux.do article:", error);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Failed to fetch article: ${error instanceof Error ? error.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  // CSDN article fetching tool
-  server.tool(
-    "fetchCsdnArticle",
-    "Fetch full article content from a csdn post URL",
-    {
-      url: z
-        .string()
-        .url()
-        .refine(
-          (url) => validateArticleUrl(url, "csdn"),
-          "URL must be from blog.csdn.net contains /article/details/ path",
-        ),
-    },
-    async ({ url }) => {
-      try {
-        console.error(`Fetching CSDN article: ${url}`);
-        const result = await fetchCsdnArticle(url);
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: result.content,
-            },
-          ],
-        };
-      } catch (error) {
-        console.error("Failed to fetch CSDN article:", error);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Failed to fetch article: ${error instanceof Error ? error.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  // GitHub README fetching tool
-  server.tool(
-    "fetchGithubReadme",
-    "Fetch README content from a GitHub repository URL",
-    {
-      url: z
-        .string()
-        .min(1)
-        .refine(
-          (url) => validateGithubUrl(url),
-          "URL must be a valid GitHub repository URL (supports HTTPS, SSH formats)",
-        ),
-    },
-    async ({ url }) => {
-      try {
-        console.error(`Fetching GitHub README: ${url}`);
-        const result = await fetchGithubReadme(url);
-
-        if (result) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: result,
-              },
-            ],
-          };
-        } else {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "README not found or repository does not exist",
-              },
-            ],
-            isError: true,
-          };
-        }
-      } catch (error) {
-        console.error("Failed to fetch GitHub README:", error);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Failed to fetch README: ${error instanceof Error ? error.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  // Juejin article fetching tool
-  server.tool(
-    "fetchJuejinArticle",
-    "Fetch full article content from a Juejin(掘金) post URL",
-    {
-      url: z
-        .string()
-        .url()
-        .refine(
-          (url) => validateArticleUrl(url, "juejin"),
-          "URL must be from juejin.cn and contain /post/ path",
-        ),
-    },
-    async ({ url }) => {
-      try {
-        console.error(`Fetching Juejin article: ${url}`);
-        const result = await fetchJuejinArticle(url);
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: result.content,
-            },
-          ],
-        };
-      } catch (error) {
-        console.error("Failed to fetch Juejin article:", error);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Failed to fetch article: ${error instanceof Error ? error.message : "Unknown error"}`,
             },
           ],
           isError: true,

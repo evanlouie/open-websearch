@@ -27,20 +27,13 @@ A Model Context Protocol (MCP) server based on multi-engine search results, supp
 - Returns structured results with titles, URLs, and descriptions
 - Configurable number of results per search
 - Customizable default search engine
-- Support for fetching individual article content
-  - csdn
-  - github (README files)
-  - juejin
 - TypeScript strict mode with comprehensive type safety
 - Integration test suite with 16+ tests
 - Multiple transport modes (HTTP, STDIO, or both)
 
 ## TODO
 
-- Support for ~~Bing~~ (already supported), ~~DuckDuckGo~~ (already supported), ~~Exa~~ (already supported), ~~Brave~~ (already supported), Google and other search engines
-- Support for more blogs, forums, and social platforms
-- Optimize article content extraction, add support for more sites
-- ~~Support for GitHub README fetching~~ (already supported)
+- Support for ~~Bing~~ (already supported), ~~DuckDuckGo~~ (already supported), ~~Brave~~ (already supported), Google and other search engines
 
 ## Installation Guide
 
@@ -119,7 +112,7 @@ bun start
     "web-search": {
       "name": "Web Search MCP",
       "type": "streamableHttp",
-      "description": "Multi-engine web search with article fetching",
+      "description": "Multi-engine web search",
       "isActive": true,
       "baseUrl": "http://localhost:3000/mcp"
     }
@@ -246,7 +239,7 @@ Then configure in your MCP client:
     "web-search": {
       "name": "Web Search MCP",
       "type": "streamableHttp",
-      "description": "Multi-engine web search with article fetching",
+      "description": "Multi-engine web search",
       "isActive": true,
       "baseUrl": "http://localhost:3000/mcp"
     },
@@ -254,7 +247,7 @@ Then configure in your MCP client:
       "transport": {
         "name": "Web Search MCP",
         "type": "sse",
-        "description": "Multi-engine web search with article fetching",
+        "description": "Multi-engine web search",
         "isActive": true,
         "url": "http://localhost:3000/sse"
       }
@@ -265,7 +258,7 @@ Then configure in your MCP client:
 
 ## Usage Guide
 
-The server provides four tools: `search`, `fetchLinuxDoArticle`, `fetchCsdnArticle`, and `fetchGithubReadme`.
+The server provides one tool: `search`.
 
 ### search Tool Usage
 
@@ -301,145 +294,6 @@ Response example:
     "description": "Description text of the search result...",
     "source": "Source",
     "engine": "Engine used"
-  }
-]
-```
-
-### fetchCsdnArticle Tool Usage
-
-Used to fetch complete content of CSDN blog articles.
-
-```typescript
-{
-  "url": string    // URL from CSDN search results using the search tool
-}
-```
-
-Usage example:
-
-```typescript
-use_mcp_tool({
-  server_name: "web-search",
-  tool_name: "fetchCsdnArticle",
-  arguments: {
-    url: "https://blog.csdn.net/xxx/article/details/xxx",
-  },
-});
-```
-
-Response example:
-
-```json
-[
-  {
-    "content": "Example search result"
-  }
-]
-```
-
-### fetchLinuxDoArticle Tool Usage
-
-Used to fetch complete content of Linux.do forum articles.
-
-```typescript
-{
-  "url": string    // URL from linuxdo search results using the search tool
-}
-```
-
-Usage example:
-
-```typescript
-use_mcp_tool({
-  server_name: "web-search",
-  tool_name: "fetchLinuxDoArticle",
-  arguments: {
-    url: "https://xxxx.json",
-  },
-});
-```
-
-Response example:
-
-```json
-[
-  {
-    "content": "Example search result"
-  }
-]
-```
-
-### fetchGithubReadme Tool Usage
-
-Used to fetch README content from GitHub repositories.
-
-```typescript
-{
-  "url": string    // GitHub repository URL (supports HTTPS, SSH formats)
-}
-```
-
-Usage example:
-
-```typescript
-use_mcp_tool({
-  server_name: "web-search",
-  tool_name: "fetchGithubReadme",
-  arguments: {
-    url: "https://github.com/evanlouie/open-websearch",
-  },
-});
-```
-
-Supported URL formats:
-
-- HTTPS: `https://github.com/owner/repo`
-- HTTPS with .git: `https://github.com/owner/repo.git`
-- SSH: `git@github.com:owner/repo.git`
-- URLs with parameters: `https://github.com/owner/repo?tab=readme`
-
-Response example:
-
-```json
-[
-  {
-    "content": "<div align=\"center\">\n\n# Open-WebSearch MCP Server..."
-  }
-]
-```
-
-### fetchJuejinArticle Tool Usage
-
-Used to fetch complete content of Juejin articles.
-
-```typescript
-{
-  "url": string    // Juejin article URL from search results
-}
-```
-
-Usage example:
-
-```typescript
-use_mcp_tool({
-  server_name: "web-search",
-  tool_name: "fetchJuejinArticle",
-  arguments: {
-    url: "https://juejin.cn/post/7520959840199360563",
-  },
-});
-```
-
-Supported URL format:
-
-- `https://juejin.cn/post/{article_id}`
-
-Response example:
-
-```json
-[
-  {
-    "content": "🚀 开源 AI 联网搜索工具：Open-WebSearch MCP 全新升级，支持多引擎 + 流式响应..."
   }
 ]
 ```
