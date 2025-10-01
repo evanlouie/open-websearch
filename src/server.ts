@@ -1,5 +1,5 @@
+import { Effect } from "effect";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { setupTools } from "./tools/setupTools.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
@@ -7,32 +7,37 @@ import { randomUUID } from "node:crypto";
 import {
   createServer,
   IncomingMessage,
-  ServerResponse,
   Server,
+  ServerResponse,
 } from "node:http";
+import { setupTools } from "./tools/setupTools.js";
 
-// Helper to parse JSON from IncomingMessage
-export async function parseBody(req: IncomingMessage): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk) => (body += chunk));
-    req.on("end", () => {
-      try {
-        resolve(body ? JSON.parse(body) : {});
-      } catch (err) {
-        reject(err);
-      }
-    });
-    req.on("error", reject);
+export const parseBody = (req: IncomingMessage) =>
+  Effect.tryPromise<unknown, Error>({
+    try: () =>
+      new Promise((resolve, reject) => {
+        let body = "";
+        req.on("data", (chunk) => {
+          body += chunk;
+        });
+        req.on("end", () => {
+          try {
+            resolve(body ? JSON.parse(body) : {});
+          } catch (error) {
+            reject(error);
+          }
+        });
+        req.on("error", reject);
+      }),
+    catch: (cause) =>
+      cause instanceof Error ? cause : new Error(String(cause)),
   });
-}
 
-// Helper to add CORS headers
-export function addCorsHeaders(
+export const addCorsHeaders = (
   res: ServerResponse,
   enableCors: boolean,
   corsOrigin: string = "*",
-) {
+) => {
   if (enableCors) {
     res.setHeader("Access-Control-Allow-Origin", corsOrigin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE");
@@ -41,171 +46,336 @@ export function addCorsHeaders(
       "Content-Type, mcp-session-id",
     );
   }
-}
+};
 
-// Create and configure MCP server
-export function createMcpServer(): McpServer {
+export const createMcpServer = Effect.gen(function* (_) {
   const server = new McpServer({
     name: "web-search",
     version: "1.2.0",
   });
 
-  setupTools(server);
+  yield* _(setupTools(server));
+
   return server;
-}
+});
 
-// Create HTTP server with MCP transports
-export function createHttpServer(
-  mcpServer: McpServer,
-  options: {
-    enableCors?: boolean;
-    corsOrigin?: string;
-  } = {},
-): Server {
-  const { enableCors = false, corsOrigin = "*" } = options;
+type HttpServerOptions = {
+  enableCors?: boolean;
+  corsOrigin?: string;
+};
 
-  // Store transports for each session type
-  const transports = {
-    streamable: {} as Record<string, StreamableHTTPServerTransport>,
-    sse: {} as Record<string, SSEServerTransport>,
-  };
+type StreamableTransports = Record<string, StreamableHTTPServerTransport>;
+type SseTransports = Record<string, SSEServerTransport>;
 
-  const httpServer = createServer(
-    async (req: IncomingMessage, res: ServerResponse) => {
-      const url = new URL(req.url || "/", `http://${req.headers.host}`);
-      const pathname = url.pathname;
-      const method = req.method;
+type Transports = {
+  streamable: StreamableTransports;
+  sse: SseTransports;
+};
 
-      addCorsHeaders(res, enableCors, corsOrigin);
+const connectServer = (server: McpServer, transport: SSEServerTransport) =>
+  Effect.tryPromise<void, Error>({
+    try: () => server.connect(transport),
+    catch: (cause) =>
+      cause instanceof Error ? cause : new Error(String(cause)),
+  });
 
-      // Handle CORS preflight
-      if (method === "OPTIONS") {
-        res.writeHead(204);
-        res.end();
+const connectStreamableServer = (
+  server: McpServer,
+  transport: StreamableHTTPServerTransport,
+) =>
+  Effect.tryPromise<void, Error>({
+    try: () => server.connect(transport),
+    catch: (cause) =>
+      cause instanceof Error ? cause : new Error(String(cause)),
+  });
+
+const handleTransportRequest = (
+  transport: StreamableHTTPServerTransport,
+  req: IncomingMessage,
+  res: ServerResponse,
+  body?: unknown,
+) =>
+  Effect.tryPromise<void, Error>({
+    try: () => transport.handleRequest(req, res, body),
+    catch: (cause) =>
+      cause instanceof Error ? cause : new Error(String(cause)),
+  });
+
+const handleSsePostMessage = (
+  transport: SSEServerTransport,
+  req: IncomingMessage,
+  res: ServerResponse,
+  body: unknown,
+) =>
+  Effect.tryPromise<void, Error>({
+    try: () => transport.handlePostMessage(req, res, body),
+    catch: (cause) =>
+      cause instanceof Error ? cause : new Error(String(cause)),
+  });
+
+const writeJson = (res: ServerResponse, status: number, payload: unknown) =>
+  Effect.sync(() => {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(payload));
+  });
+
+const writeText = (res: ServerResponse, status: number, message: string) =>
+  Effect.sync(() => {
+    res.writeHead(status);
+    res.end(message);
+  });
+
+const ensureStreamableTransport = (transports: Transports, sessionId: string) =>
+  transports.streamable[sessionId];
+
+const ensureSseTransport = (transports: Transports, sessionId: string) =>
+  transports.sse[sessionId];
+
+const handleStreamableInitialize = (
+  server: McpServer,
+  transports: Transports,
+) =>
+  Effect.gen(function* (_) {
+    const transport = yield* _(
+      Effect.sync(() => {
+        const newTransport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => randomUUID(),
+          onsessioninitialized: (sessionId) => {
+            transports.streamable[sessionId] = newTransport;
+          },
+        });
+
+        newTransport.onclose = () => {
+          if (newTransport.sessionId) {
+            delete transports.streamable[newTransport.sessionId];
+          }
+        };
+
+        return newTransport;
+      }),
+    );
+
+    yield* _(connectStreamableServer(server, transport));
+
+    return transport;
+  });
+
+const handlePostMcp = (
+  server: McpServer,
+  transports: Transports,
+  req: IncomingMessage,
+  res: ServerResponse,
+) =>
+  Effect.gen(function* (_) {
+    const sessionIdHeader = req.headers["mcp-session-id"] as string | undefined;
+    const body = yield* _(parseBody(req));
+
+    if (sessionIdHeader) {
+      const existing = ensureStreamableTransport(transports, sessionIdHeader);
+      if (!existing) {
+        yield* _(
+          writeJson(res, 400, {
+            jsonrpc: "2.0",
+            error: {
+              code: -32000,
+              message: "Bad Request: No valid session ID provided",
+            },
+            id: null,
+          }),
+        );
         return;
       }
 
-      try {
-        // Route: POST /mcp - StreamableHTTP main endpoint
-        if (method === "POST" && pathname === "/mcp") {
-          const sessionId = req.headers["mcp-session-id"] as string | undefined;
-          const body = await parseBody(req);
-          let transport: StreamableHTTPServerTransport;
+      yield* _(handleTransportRequest(existing, req, res, body));
+      return;
+    }
 
-          if (sessionId && transports.streamable[sessionId]) {
-            // Reuse existing transport
-            transport = transports.streamable[sessionId];
-          } else if (!sessionId && isInitializeRequest(body)) {
-            // New initialization request
-            transport = new StreamableHTTPServerTransport({
-              sessionIdGenerator: () => randomUUID(),
-              onsessioninitialized: (sessionId) => {
-                // Store the transport by session ID
-                transports.streamable[sessionId] = transport;
-              },
-              // DNS rebinding protection is disabled by default for backwards compatibility. If you are running this server
-              // locally, make sure to set:
-              // enableDnsRebindingProtection: true,
-              // allowedHosts: ['127.0.0.1'],
-            });
+    if (!isInitializeRequest(body)) {
+      yield* _(
+        writeJson(res, 400, {
+          jsonrpc: "2.0",
+          error: {
+            code: -32000,
+            message: "Bad Request: No valid session ID provided",
+          },
+          id: null,
+        }),
+      );
+      return;
+    }
 
-            // Clean up transport when closed
-            transport.onclose = () => {
-              if (transport.sessionId) {
-                delete transports.streamable[transport.sessionId];
-              }
-            };
+    const transport = yield* _(handleStreamableInitialize(server, transports));
 
-            // Connect to the MCP server
-            await mcpServer.connect(transport);
-          } else {
-            // Invalid request
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(
-              JSON.stringify({
-                jsonrpc: "2.0",
-                error: {
-                  code: -32000,
-                  message: "Bad Request: No valid session ID provided",
-                },
-                id: null,
-              }),
-            );
-            return;
-          }
+    yield* _(handleTransportRequest(transport, req, res, body));
+  });
 
-          // Handle the request directly - no adapters needed
-          await transport.handleRequest(req, res, body);
-          return;
-        }
+const handleGetMcp = (
+  transports: Transports,
+  req: IncomingMessage,
+  res: ServerResponse,
+) =>
+  Effect.gen(function* (_) {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    if (!sessionId) {
+      yield* _(writeText(res, 400, "Invalid or missing session ID"));
+      return;
+    }
 
-        // Route: GET /mcp - Server-to-client notifications via SSE
-        if (method === "GET" && pathname === "/mcp") {
-          const sessionId = req.headers["mcp-session-id"] as string | undefined;
-          if (!sessionId || !transports.streamable[sessionId]) {
-            res.writeHead(400);
-            res.end("Invalid or missing session ID");
-            return;
-          }
+    const transport = ensureStreamableTransport(transports, sessionId);
+    if (!transport) {
+      yield* _(writeText(res, 400, "Invalid or missing session ID"));
+      return;
+    }
 
-          const transport = transports.streamable[sessionId];
-          await transport.handleRequest(req, res);
-          return;
-        }
+    yield* _(handleTransportRequest(transport, req, res));
+  });
 
-        // Route: DELETE /mcp - Session termination
-        if (method === "DELETE" && pathname === "/mcp") {
-          const sessionId = req.headers["mcp-session-id"] as string | undefined;
-          if (!sessionId || !transports.streamable[sessionId]) {
-            res.writeHead(400);
-            res.end("Invalid or missing session ID");
-            return;
-          }
+const handleDeleteMcp = (
+  transports: Transports,
+  req: IncomingMessage,
+  res: ServerResponse,
+) =>
+  Effect.gen(function* (_) {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+    if (!sessionId) {
+      yield* _(writeText(res, 400, "Invalid or missing session ID"));
+      return;
+    }
 
-          const transport = transports.streamable[sessionId];
-          await transport.handleRequest(req, res);
-          return;
-        }
+    const transport = ensureStreamableTransport(transports, sessionId);
+    if (!transport) {
+      yield* _(writeText(res, 400, "Invalid or missing session ID"));
+      return;
+    }
 
-        // Route: GET /sse - Legacy SSE endpoint
-        if (method === "GET" && pathname === "/sse") {
-          const transport = new SSEServerTransport("/messages", res);
-          transports.sse[transport.sessionId] = transport;
+    yield* _(handleTransportRequest(transport, req, res));
+  });
 
-          res.on("close", () => {
-            delete transports.sse[transport.sessionId];
-          });
+const handleGetSse = (
+  server: McpServer,
+  transports: Transports,
+  _req: IncomingMessage,
+  res: ServerResponse,
+) =>
+  Effect.gen(function* (_) {
+    const transport = new SSEServerTransport("/messages", res);
+    transports.sse[transport.sessionId] = transport;
 
-          await mcpServer.connect(transport);
-          return;
-        }
+    res.on("close", () => {
+      delete transports.sse[transport.sessionId];
+    });
 
-        // Route: POST /messages - Legacy message endpoint
-        if (method === "POST" && pathname === "/messages") {
-          const sessionId = url.searchParams.get("sessionId");
-          const transport = sessionId ? transports.sse[sessionId] : undefined;
-          if (transport) {
-            const body = await parseBody(req);
-            await transport.handlePostMessage(req, res, body);
-          } else {
-            res.writeHead(400);
-            res.end("No transport found for sessionId");
-          }
-          return;
-        }
+    yield* _(connectServer(server, transport));
+  });
 
-        // 404 for unknown routes
-        res.writeHead(404);
-        res.end("Not Found");
-      } catch (error) {
+const handlePostMessages = (
+  transports: Transports,
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+) =>
+  Effect.gen(function* (_) {
+    const sessionId = url.searchParams.get("sessionId");
+    if (!sessionId) {
+      yield* _(writeText(res, 400, "No transport found for sessionId"));
+      return;
+    }
+
+    const transport = ensureSseTransport(transports, sessionId);
+    if (!transport) {
+      yield* _(writeText(res, 400, "No transport found for sessionId"));
+      return;
+    }
+
+    const body = yield* _(parseBody(req));
+    yield* _(handleSsePostMessage(transport, req, res, body));
+  });
+
+const handleUnknownRoute = (res: ServerResponse) =>
+  writeText(res, 404, "Not Found");
+
+const handleHttpRequest = (
+  server: McpServer,
+  transports: Transports,
+  options: Required<HttpServerOptions>,
+  req: IncomingMessage,
+  res: ServerResponse,
+) =>
+  Effect.gen(function* (_) {
+    const url = yield* _(
+      Effect.sync(() => new URL(req.url ?? "/", `http://${req.headers.host}`)),
+    );
+    const pathname = url.pathname;
+    const method = req.method ?? "GET";
+
+    yield* _(
+      Effect.sync(() =>
+        addCorsHeaders(res, options.enableCors, options.corsOrigin),
+      ),
+    );
+
+    if (method === "OPTIONS") {
+      yield* _(
+        Effect.sync(() => {
+          res.writeHead(204);
+          res.end();
+        }),
+      );
+      return;
+    }
+
+    if (method === "POST" && pathname === "/mcp") {
+      yield* _(handlePostMcp(server, transports, req, res));
+      return;
+    }
+
+    if (method === "GET" && pathname === "/mcp") {
+      yield* _(handleGetMcp(transports, req, res));
+      return;
+    }
+
+    if (method === "DELETE" && pathname === "/mcp") {
+      yield* _(handleDeleteMcp(transports, req, res));
+      return;
+    }
+
+    if (method === "GET" && pathname === "/sse") {
+      yield* _(handleGetSse(server, transports, req, res));
+      return;
+    }
+
+    if (method === "POST" && pathname === "/messages") {
+      yield* _(handlePostMessages(transports, req, res, url));
+      return;
+    }
+
+    yield* _(handleUnknownRoute(res));
+  });
+
+export const createHttpServer = (
+  server: McpServer,
+  options: HttpServerOptions = {},
+) =>
+  Effect.sync(() => {
+    const transports: Transports = {
+      streamable: {},
+      sse: {},
+    };
+
+    const resolvedOptions: Required<HttpServerOptions> = {
+      enableCors: options.enableCors ?? false,
+      corsOrigin: options.corsOrigin ?? "*",
+    };
+
+    return createServer((req, res) => {
+      Effect.runPromise(
+        handleHttpRequest(server, transports, resolvedOptions, req, res),
+      ).catch((error) => {
         console.error("Error handling request:", error);
         if (!res.headersSent) {
           res.writeHead(500);
           res.end("Internal Server Error");
         }
-      }
-    },
-  );
-
-  return httpServer;
-}
+      });
+    });
+  });

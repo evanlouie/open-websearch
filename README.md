@@ -31,10 +31,24 @@ A Model Context Protocol (MCP) server based on multi-engine search results, supp
 - TypeScript strict mode with comprehensive type safety
 - Integration test suite with 22+ tests
 - Multiple transport modes (HTTP, STDIO, or both)
+- Built on the [Effect](https://effect.website/) runtime for deterministic concurrency, configuration, and error handling
+
+## Architecture Highlights
+
+- **Effect-driven runtime:** All configuration, transport startup, and search execution flows are modeled with `Effect`, giving structured error boundaries and composable concurrency.
+- **Config layer:** Environment variables are decoded once into an `AppConfig` service that is provided to every effectful component (engines, tools, transports).
+- **Service-oriented tools:** MCP tool registration wraps effect programs, so failures propagate through typed errors and are translated into structured MCP responses.
+- **Engine effects:** Each search engine exposes an effectful API that composes configuration (proxies, limits) with scraping logic while keeping side effects isolated.
 
 ## TODO
 
-- Support for ~~Bing~~ (already supported), ~~DuckDuckGo~~ (already supported), ~~Brave~~ (already supported), Google and other search engines
+- Additional search engines (Google, etc.)
+
+## Development Workflow
+
+- Install deps with `bun install`, then run `bunx tsc --noEmit`, `bun run typecheck`, and `bun test` before submitting changes.
+- Use `bunx prettier --write .` to maintain formatting.
+- Manual engine smoke tests live in `test/` (`test-bing.ts`, `test-brave.ts`, `test-duckduckgo.ts`) and execute the Effect-based search flows with the shared `AppConfig` layer. Run them with `bun test/test-bing.ts`, etc., when debugging scraper changes.
 
 ## Installation Guide
 

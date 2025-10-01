@@ -1,18 +1,24 @@
 import { describe, test, expect } from "bun:test";
+import { Effect } from "effect";
+import { AppConfigLayer } from "../config.js";
 
 describe("Multi-Query Search Tests", () => {
   test("Server starts successfully with multi-query support", async () => {
     // This test verifies that the server can be created without errors
     // The multi-query functionality is implicitly tested through the tool schema
     const { createMcpServer } = await import("../server.js");
-    const server = createMcpServer();
+    const server = await Effect.runPromise(
+      createMcpServer.pipe(Effect.provide(AppConfigLayer)),
+    );
 
     expect(server).toBeDefined();
   });
 
   test("Multi-query tool description includes multiple queries support", async () => {
     const { createMcpServer } = await import("../server.js");
-    const server = createMcpServer();
+    const server = await Effect.runPromise(
+      createMcpServer.pipe(Effect.provide(AppConfigLayer)),
+    );
 
     // Verify server has name and version
     expect(server).toBeDefined();

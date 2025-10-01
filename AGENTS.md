@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Open-WebSearch is a Model Context Protocol (MCP) server that provides multi-engine web search capabilities without requiring API keys. It scrapes search results from various engines (Bing, DuckDuckGo, Brave).
+Open-WebSearch is a Model Context Protocol (MCP) server that provides multi-engine web search capabilities without requiring API keys. It scrapes search results from various engines (Bing, DuckDuckGo, Brave) and orchestrates configuration + runtime concerns through the [Effect](https://effect.website/) library.
 
 **Repository:** https://github.com/evanlouie/open-websearch
 
@@ -69,20 +69,22 @@ The server supports three operational modes via the `MODE` environment variable:
 
 ### Entry Point
 
-- **`src/index.ts`**: Main server initialization (thin entry point)
-  - Creates MCP server using `createMcpServer()` from server.ts
+- **`src/index.ts`**: Main server initialization (Effect program)
+  - Obtains configuration via the `AppConfig` layer exposed in `src/config.ts`
+  - Creates MCP server using the effectful `createMcpServer()` from `server.ts`
   - Configures STDIO transport if enabled
   - Creates HTTP server using `createHttpServer()` if enabled
-  - Manages server startup based on MODE environment variable
+  - Manages server startup based on MODE environment variable inside the Effect runtime
 
 ### Configuration System
 
-- **`src/config.ts`**: Centralized configuration via environment variables
+- **`src/config.ts`**: Centralized configuration via environment variables, decoded into an Effect layer (`AppConfig`)
   - Default search engine selection
   - Allowed search engines list (restricts which engines can be used)
   - Proxy configuration for restricted regions
   - CORS settings for HTTP server
   - Server mode (HTTP, STDIO, or both)
+  - Provides helper Effect utilities such as `getProxyUrl()`
 
 Key configuration variables:
 
@@ -96,16 +98,16 @@ Key configuration variables:
 
 ### MCP Tools Registration
 
-- **`src/tools/setupTools.ts`**: Registers all MCP tools with the server
+- **`src/tools/setupTools.ts`**: Registers all MCP tools with the server via Effect
   - `search`: Multi-engine web search supporting single or multiple queries (max 10)
-  - Handles search result distribution across multiple engines
-  - Implements per-engine sequential, cross-engine parallel execution for multi-query searches
+  - Handles search result distribution across multiple engines using effectful concurrency helpers
+  - Implements per-engine sequential, cross-engine parallel execution for multi-query searches with typed error handling
 
 ### Search Engine Architecture
 
 Each search engine is implemented as a separate module in `src/engines/[engine-name]/`:
 
-- **Search function**: Scrapes search results using axios + cheerio
+- **Search function**: Scrapes search results using axios + cheerio wrapped in an Effect
 - **index.ts**: Exports public API for the engine
 
 Search engines use web scraping to extract structured data:
@@ -113,7 +115,8 @@ Search engines use web scraping to extract structured data:
 - Parse HTML using cheerio
 - Extract titles, URLs, descriptions from search result pages
 - Handle pagination when needed
-- Return standardized `SearchResult` objects
+- Return standardized `SearchResult` objects wrapped in `Effect`
+- Surface scraper failures through `SearchEngineError`
 
 ### Type Definitions
 
@@ -125,10 +128,10 @@ Search engines use web scraping to extract structured data:
 HTTP server implementation is split across:
 
 - **`src/server.ts`**: Server creation and configuration (exported for testing)
-  - `createMcpServer()`: Creates and configures MCP server with tools
-  - `createHttpServer()`: Creates HTTP server with transport handlers
-  - Helper functions: `parseBody()`, `addCorsHeaders()`
-- **`src/index.ts`**: Main entry point that uses server.ts exports
+  - `createMcpServer()`: Effect that creates and configures the MCP server with tools
+  - `createHttpServer()`: Effectful factory that returns an HTTP server with transport handlers
+  - Helper utilities: `parseBody()`, `addCorsHeaders()` implemented via Effect
+- **`src/index.ts`**: Main entry point that runs the Effect program with the config layer
 
 When HTTP mode is enabled:
 
@@ -145,12 +148,21 @@ When HTTP mode is enabled:
 ## Adding a New Search Engine
 
 1. Create directory: `src/engines/[engine-name]/`
-2. Implement search function in `[engine-name].ts`:
+2. Implement search function in `[engine-name].ts` that returns an `Effect<SearchResult[], SearchEngineError, AppConfig>`:
+
    ```typescript
-   export async function search[EngineName](query: string, limit: number): Promise<SearchResult[]> {
-     // Scraping logic using axios + cheerio
-   }
+   import { Effect } from "effect";
+   import { SearchEngineError, type SearchResult } from "../types.js";
+   import { type AppConfig } from "../config.js";
+
+   export const searchExample = (
+     query: string,
+     limit: number,
+   ): Effect.Effect<SearchResult[], SearchEngineError, AppConfig> => {
+     // Scraping logic using axios + cheerio wrapped inside Effect helpers
+   };
    ```
+
 3. Add engine to `src/tools/setupTools.ts`:
    - Add to `SUPPORTED_ENGINES` array
    - Add to `engineMap` with search function
@@ -176,11 +188,11 @@ bun test
 
 ### Manual Engine Tests
 
-Manual testing can be done by running individual engine test files in `src/test/`:
+Manual testing can be done by running individual engine test files in `test/`:
 
-- `test-bing.ts`, `test-baidu.ts`, `test-duckduckgo.ts`, etc.
+- `test-bing.ts`, `test-brave.ts`, `test-duckduckgo.ts`, etc.
 
-These are standalone test scripts that directly import and test engine functions.
+These scripts run the engine effects via the shared config layer for ad-hoc verification.
 
 ### Development Workflow
 
@@ -238,3 +250,420 @@ The project MUST maintain:
 - Used by all search engines via axios configuration
 - Helper function: `getProxyUrl()` in `src/config.ts`
 - Never log to stdout as it breaks MCP. Only log to stderr
+
+---
+
+# Effect Reference Guide
+
+Below is a practical **Effect (TypeScript) reference guide**—a “most-used first” cheat‑sheet you can keep at hand. It focuses on the stable, everyday APIs you’ll reach for when building real apps with Effect. I link each section to the official docs so you can jump deeper when needed.
+
+## 0) The mental model
+
+- **Effect<A, E, R>** — a _description_ of a computation that:
+
+  - **Succeeds** with `A`,
+  - may **fail** with a _typed_ error `E`,
+  - and may **require** services / dependencies `R`.
+    Read: “_This effect needs `R`, might fail with `E`, and if it works you get `A`._” ([Effect][1])
+
+- You write programs by **composing** effects (map/flatMap/zip/…) and **running** them at the edge (`Effect.run*`). ([EffectTS][2])
+
+---
+
+## 1) Imports & common style
+
+```ts
+import {
+  Effect,
+  Layer,
+  Context,
+  Duration,
+  Schedule,
+  Ref,
+  Queue,
+  PubSub,
+  Deferred,
+  Semaphore,
+  Stream,
+  Logger,
+  Metric,
+} from "effect";
+```
+
+- APIs are offered in **dual** forms (data-first & data-last). Use data-last with `pipe` or `effect.pipe(...)`. ([Effect][3])
+- Prefer `Effect.gen(function* () { ... })` for readable, sequential code: you can `yield*` other effects/services.
+
+---
+
+## 2) Creating effects (sync & async)
+
+```ts
+// Pure successes & failures
+const ok = Effect.succeed(42);
+const failE = Effect.fail(new Error("boom"));
+
+// Synchronous side-effects
+const now = Effect.sync(() => Date.now());
+const safeTry = Effect.try({
+  try: () => mightThrow(),
+  catch: (e) => new DomainErr(e),
+});
+
+// Async (Promise-based)
+const fromP = Effect.promise(() => fetch(url).then((r) => r.json()));
+const safeTryP = Effect.tryPromise({
+  try: () => fetch(url),
+  catch: (e) => new HttpErr(e),
+});
+
+// Defer building an effect until use (avoid accidental capture)
+const suspended = Effect.suspend(() => Effect.succeed(expensive()));
+```
+
+- Use `Effect.suspend` when constructing effects with captured state or side‑effects to ensure fresh evaluation. ([Effect][4])
+- Use `Effect.try` / `Effect.tryPromise` to **map exceptions/rejections** into your typed error channel. ([Effect][4])
+
+---
+
+## 3) Composing & control flow
+
+```ts
+const program = ok.pipe(
+  Effect.map((n) => n + 1),
+  Effect.flatMap((n) => Effect.succeed(n * 2)),
+  Effect.zip(Effect.succeed("units")), // tuple
+  Effect.map(([n, u]) => `${n} ${u}`),
+);
+```
+
+Useful helpers:
+
+```ts
+Effect.when(condition, Effect.log("only if true")); // conditional
+Effect.forEach(items, (item) => work(item), { concurrency: 8 });
+Effect.all(effects, { concurrency: "unbounded" }); // run many
+Effect.race(e1, e2); // first to finish wins
+```
+
+See full list of control-flow & collecting operators. ([Effect][5])
+Concurrency knobs (`concurrency: number | "unbounded" | "inherit"`) apply across many “batch” APIs (`forEach`, `all`, streams, etc.). ([Effect][6])
+
+---
+
+## 4) Running effects
+
+```ts
+await Effect.runPromise(program); // bridge to Promise
+const value = Effect.runSync(Effect.succeed(1)); // sync-only
+const fiber = Effect.runFork(Effect.log("Hello")); // fire-and-forget fiber (supervised by runtime)
+```
+
+Use `runPromise` at integration boundaries; `runFork` returns a **fiber** you can observe/cancel. ([EffectTS][2])
+
+---
+
+## 5) Services (Context) & dependency injection (Layer)
+
+### Define a service & use it
+
+```ts
+interface Clock {
+  readonly now: Effect.Effect<number>;
+}
+const Clock = Context.Tag<Clock>(); // service "key" (Tag)
+
+const usesClock = Effect.gen(function* () {
+  const clock = yield* Clock;
+  return yield* clock.now;
+});
+```
+
+### Provide an implementation (Layer)
+
+```ts
+const LiveClock = Layer.succeed(Clock, { now: Effect.sync(() => Date.now()) });
+
+await Effect.runPromise(usesClock.pipe(Effect.provide(LiveClock)));
+```
+
+- **Tags** declare _what_ you need; **Layers** declare _how to build/provide_ it (including wiring transitive deps). ([Effect][7])
+- Layers are **memoized** by default to avoid duplicate startups (configurable). ([Effect][8])
+- Some **default services** (logger, random, clock, etc.) ship out of the box and can be replaced. ([Effect][9])
+
+---
+
+## 6) Error management (typed failures & defects)
+
+- **Two error classes**:
+
+  - **Expected (typed)** domain failures in the `E` channel (use `fail`/`try`/`tryPromise`, handle with `catch*` family).
+  - **Unexpected (defects)** like programmer bugs—tracked by the runtime, accessible via causes/sandboxing. ([Effect][10])
+
+```ts
+const safe = risky.pipe(
+  Effect.catchAll((err) => Effect.logError(err)), // handle typed error
+);
+
+const sandboxed = Effect.sandbox(risky); // expose Cause (fail/defect/interruption)
+```
+
+- Time limits: `Effect.timeout(d)` / `timeoutTo(...)`; consider `Effect.disconnect` to let work continue in the background on timeout. ([Effect][11])
+- Inspect precise failure reasons with **Cause**. ([Effect][12])
+
+---
+
+## 7) Retrying & repetition (Schedule)
+
+```ts
+const policy = Schedule.exponential("100 millis") // backoff
+  .pipe(Schedule.jittered, Schedule.recurs(5)); // add jitter; cap attempts
+
+const fetched = Effect.tryPromise({
+  try: () => fetch(url),
+  catch: () => new HttpErr(),
+}).pipe(Effect.retry(policy));
+```
+
+- **Schedule<Out, In, R>** describes _when/how often_ to repeat/retry. Built‑ins: `spaced`, `exponential`, `recurs`, `cron`, and compositors. ([Effect][13])
+- `Effect.retry` / `retryOrElse` pair effects with schedules. ([Effect][14])
+
+---
+
+## 8) Resource safety (Scope, acquire/release)
+
+```ts
+const resource = Effect.acquireRelease(
+  Effect.promise(() => openHandle()),
+  (h) => Effect.promise(() => h.close()),
+);
+
+const use = Effect.scoped(
+  Effect.gen(function* () {
+    const h = yield* resource;
+    // ... use h
+  }),
+);
+```
+
+- `acquireRelease` & **Scope** guarantee finalization on success, failure, or interruption; `Effect.scoped(...)` ties lifetimes to a scope automatically. ([Effect][15])
+
+---
+
+## 9) Concurrency primitives
+
+- **Fibers** — lightweight, interruptible threads of Effect; use `Effect.fork`, `fiber.join`, `fiber.interrupt`, scoped for safe lifetimes. ([Effect][16])
+- **Deferred<A,E>** — a one‑shot promise you can await/complete. Great for coordination. ([Effect][17])
+- **Queue<T>** — in‑memory queue with backpressure (bounded/unbounded/dropping/sliding). Pairs of `offer`/`take`. ([Effect][18])
+- **PubSub<T>** — broadcast to many subscribers (`publish` / `subscribe`). ([Effect][19])
+- **Semaphore** — limit concurrency via permits (`withPermits(n)(effect)`). ([Effect][20])
+
+Many “batch” combinators accept a `{ concurrency }` option so you can tune parallelism without manual primitives. ([Effect][6])
+
+---
+
+## 10) State management (Refs)
+
+- **Ref<A>** — atomic mutable cell for shared state across fibers.
+  `Ref.make`, `get`, `set`, `update`, `modify`.
+- **SynchronizedRef<A>** — `Ref` with fairness guarantees under contention.
+- **SubscriptionRef<A>** — read‑optimized ref that supports subscriptions to value changes. ([Effect][21])
+
+---
+
+## 11) Streams (pull-based, backpressured)
+
+- **Stream<A, E, R>** is to “many values” what `Effect` is to “one value”.
+- Create: `Stream.make(...)`, `fromIterable`, `fromAsyncIterable`, `fromQueue`, `fromPubSub`, `range`, `iterate`, `scoped`, `fromSchedule`…
+- Transform: `map`, `filter`, `flatMap`, `merge`, `zip`, `via(Sink)`…
+- Consume: `Stream.runCollect`, `runForEach`, `runFold`, or by **Sink**. ([Effect][22])
+
+Example:
+
+```ts
+const q = yield * Queue.bounded<number>(100);
+
+const producer = Effect.forEach([1, 2, 3], (n) => q.offer(n));
+const consumer = Stream.fromQueue(q).pipe(
+  Stream.runForEach((n) => Effect.log(n)),
+);
+
+await Effect.runPromise(Effect.all([producer, consumer]));
+```
+
+---
+
+## 12) Observability (logs • metrics • traces)
+
+### Logging
+
+```ts
+const program = Effect.log("hello").pipe(
+  Effect.annotateLogs({ requestId: "abc" }),
+  Effect.withLogSpan("handleRequest"),
+);
+```
+
+- Dynamic log levels, annotations, spans; plug pretty/JSON loggers or file logger via platform tools. ([Effect][23])
+
+### Metrics
+
+- Built‑ins: **Counter**, **Gauge**, **Histogram**, **Summary**, **Frequency**; tag metrics for rich analysis. ([Effect][24])
+
+### Tracing
+
+- Add spans with `Effect.withSpan("name", effect)`; nest spans; export to backends. Logs can appear as span events. ([Effect][25])
+
+- Supervisors can watch fibers for lifecycle events. ([Effect][26])
+
+---
+
+## 13) Configuration
+
+- Declare configuration needs against a **ConfigProvider** and decode with schemas. Swap providers per environment (env vars, files, etc.). ([Effect][27])
+- You can also configure default services (e.g., default config provider) globally. ([Effect][9])
+
+---
+
+## 14) Data validation with Schema (first‑class in Effect)
+
+```ts
+import { Schema } from "effect";
+
+const Person = Schema.Struct({ name: Schema.String, age: Schema.Number });
+type Person = Schema.Type<typeof Person>;
+
+const decode = Schema.decodeUnknown(Person); // (u: unknown) => Effect.Effect<Person, ParseError>
+```
+
+- Parse/encode with `decode*`/`encode*` helpers.
+- Compose & transform schemas; async transforms can **return Effect** and declare dependencies in `R`. ([Effect][28])
+
+---
+
+## 15) Time utilities
+
+- Use `Duration` helpers (`millis`, `"1 second"` shorthand in many APIs) with sleep/timeout/schedules. ([Effect][29])
+
+---
+
+## 16) Patterns you’ll write all the time
+
+### A. Robust HTTP call (timeout + retry w/ backoff + logging)
+
+```ts
+const fetchJson = (url: string) =>
+  Effect.gen(function* () {
+    yield* Effect.log(`GET ${url}`);
+    const res = yield* Effect.tryPromise({
+      try: () => fetch(url),
+      catch: (e) => new Error(`Network: ${String(e)}`),
+    });
+    if (!res.ok) return yield* Effect.fail(new Error(`HTTP ${res.status}`));
+    return yield* Effect.promise(() => res.json() as Promise<unknown>);
+  }).pipe(
+    Effect.timeout("2 seconds"),
+    Effect.retry(Schedule.exponential("100 millis").pipe(Schedule.recurs(4))),
+  );
+```
+
+This combines **typed errors**, **timeouts**, and **retries** with an **exponential backoff** policy. ([Effect][11])
+
+### B. Acquire/use/release with scope
+
+```ts
+const withFile = Effect.acquireUseRelease(
+  Effect.promise(() => fs.promises.open(path, "r")),
+  (f) => Effect.promise(() => f.close()),
+  (f) => Effect.promise(() => f.read(/*...*/)),
+);
+```
+
+Everything is cleaned up even on failure/interruption. ([Effect][15])
+
+### C. Parallel work with bounded concurrency
+
+```ts
+const results = await Effect.runPromise(
+  Effect.forEach(urls, fetchJson, { concurrency: 8 }),
+);
+```
+
+Bounded concurrency keeps load under control. ([Effect][6])
+
+---
+
+## Quick operator index (memorize these)
+
+- **Creation**: `succeed`, `fail`, `sync`, `try`, `promise`, `tryPromise`, `suspend`, `sleep`. ([Effect][4])
+- **Composition**: `map`, `flatMap`, `zip/zipWith`, `all`, `forEach`, `race`. ([Effect][5])
+- **Error**: `catchAll`, `catchTag`, `mapError`, `sandbox`, `timeout/timeoutTo`. ([Effect][30])
+- **Concurrency**: `fork`, `withConcurrency` options in `all/forEach`, fibers (`join`, `interrupt`). ([Effect][31])
+- **Services**: `Context.Tag`, `Layer.succeed/scoped/effect`, `Effect.provide`. ([Effect][7])
+- **Scheduling**: `Schedule.spaced/exponential/recurs/jittered/cron`, `Effect.retry/repeat`. ([Effect][13])
+- **Resource mgmt**: `acquireRelease`, `acquireUseRelease`, `scoped`, `Scope`. ([Effect][15])
+- **State & sync**: `Ref`, `SynchronizedRef`, `SubscriptionRef`, `Deferred`, `Queue`, `PubSub`, `Semaphore`. ([Effect][21])
+- **Streams**: `Stream.make/from*`, `map/filter/flatMap/merge/zip`, `runCollect/runForEach`, `Sink`. ([Effect][22])
+- **Observability**: `Effect.log/*`, `annotateLogs`, `withLogSpan`, `Logger`/`PlatformLogger`, `Metric.*`, `Effect.withSpan`. ([Effect][23])
+- **Schema**: `Schema.Struct`, `Type<typeof S>`, `decode*/encode*`, `transform/compose`. ([Effect][28])
+
+---
+
+## Where to dig deeper (official docs)
+
+- **Getting started**: type, creation, running, generators, pipelines. ([Effect][1])
+- **Requirements**: services & layers; memoization; defaults. ([Effect][7])
+- **Error management**: two error types, sandboxing, retrying, timing out, cause. ([Effect][10])
+- **Resource mgmt**: intro + scope. ([Effect][32])
+- **Concurrency**: fibers, primitives, basic concurrency. ([Effect][16])
+- **Streams**: intro, creating, consuming, operations. ([Effect][22])
+- **Observability**: logging, metrics, tracing, supervisor. ([Effect][23])
+- **Configuration**: high‑level overview. ([Effect][27])
+- **Schema**: getting started & transformations. ([Effect][28])
+
+---
+
+### Tips & gotchas
+
+- Prefer **typed errors** (`fail/try/tryPromise`) instead of throwing; reserve defects for truly unexpected issues. ([Effect][10])
+- Wrap potentially long actions with **timeouts** and **retry** policies; add **jitter** to avoid thundering herds. ([Effect][11])
+- Use **Layers** to wire external systems (DBs, HTTP clients). They make tests & composition far easier.
+- Keep parallelism in check with `{ concurrency: n }` or `Semaphore`. ([Effect][6])
+- For IO‑like sequences, reach for **Stream** and `Stream.run*` consumers instead of manual loops. ([Effect][33])
+
+---
+
+If you want, tell me what you’re building (CLI, API server, ETL, UI integration, etc.) and I’ll tailor this guide into a **project‑specific skeleton** with concrete Layers, Schedules, and Stream topologies.
+
+[1]: https://effect.website/docs/getting-started/the-effect-type/ "The Effect Type | Effect Documentation"
+[2]: https://effect-ts.github.io/effect/effect/Effect.ts.html?utm_source=chatgpt.com "effect - Effect.ts"
+[3]: https://effect.website/docs/code-style/dual/?utm_source=chatgpt.com "Dual APIs"
+[4]: https://effect.website/docs/getting-started/creating-effects/?utm_source=chatgpt.com "Creating Effects | Effect Documentation - Effect website"
+[5]: https://effect.website/docs/getting-started/control-flow/ "Control Flow Operators | Effect Documentation"
+[6]: https://effect.website/docs/concurrency/basic-concurrency/?utm_source=chatgpt.com "Basic Concurrency"
+[7]: https://effect.website/docs/concurrency/fibers/ "Fibers | Effect Documentation"
+[8]: https://effect.website/docs/requirements-management/layer-memoization/ "Layer Memoization | Effect Documentation"
+[9]: https://effect.website/docs/requirements-management/default-services/ "Default Services | Effect Documentation"
+[10]: https://effect.website/docs/error-management/two-error-types/?utm_source=chatgpt.com "Two Types of Errors"
+[11]: https://effect.website/docs/error-management/timing-out/?utm_source=chatgpt.com "Timing Out | Effect Documentation"
+[12]: https://effect.website/docs/data-types/cause/?utm_source=chatgpt.com "Cause"
+[13]: https://effect.website/docs/scheduling/introduction/ "Introduction | Effect Documentation"
+[14]: https://effect.website/docs/error-management/retrying/?utm_source=chatgpt.com "Retrying | Effect Documentation"
+[15]: https://effect.website/docs/resource-management/scope/?utm_source=chatgpt.com "Scope"
+[16]: https://effect.website/docs/error-management/retrying/ "Retrying | Effect Documentation"
+[17]: https://effect.website/docs/concurrency/deferred/?utm_source=chatgpt.com "Deferred | Effect Documentation"
+[18]: https://effect.website/docs/concurrency/queue/?utm_source=chatgpt.com "Queue | Effect Documentation"
+[19]: https://effect.website/docs/concurrency/pubsub/?utm_source=chatgpt.com "PubSub"
+[20]: https://effect.website/docs/concurrency/semaphore/?utm_source=chatgpt.com "Semaphore | Effect Documentation"
+[21]: https://effect.website/docs/state-management/ref/ "Ref | Effect Documentation"
+[22]: https://effect.website/docs/stream/introduction/ "Introduction to Streams | Effect Documentation"
+[23]: https://effect.website/docs/observability/logging/?utm_source=chatgpt.com "Logging"
+[24]: https://effect.website/docs/observability/metrics/?utm_source=chatgpt.com "Metrics in Effect | Effect Documentation"
+[25]: https://effect.website/docs/observability/tracing/ "Tracing in Effect | Effect Documentation"
+[26]: https://effect.website/docs/observability/supervisor/ "Supervisor | Effect Documentation"
+[27]: https://effect.website/docs/configuration/?utm_source=chatgpt.com "Configuration"
+[28]: https://effect.website/docs/schema/getting-started/ "Getting Started | Effect Documentation"
+[29]: https://effect.website/docs/data-types/duration/?utm_source=chatgpt.com "Duration | Effect Documentation"
+[30]: https://effect.website/docs/error-management/sandboxing/?utm_source=chatgpt.com "Sandboxing | Effect Documentation"
+[31]: https://effect.website/docs/concurrency/basic-concurrency/ "Basic Concurrency | Effect Documentation"
+[32]: https://effect.website/docs/resource-management/introduction/?utm_source=chatgpt.com "Introduction"
+[33]: https://effect.website/docs/stream/consuming-streams/?utm_source=chatgpt.com "Consuming Streams"

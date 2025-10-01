@@ -1,121 +1,187 @@
-// src/config.ts
-export interface AppConfig {
-  // Search engine configuration
-  defaultSearchEngine: "bing" | "duckduckgo" | "brave";
-  // List of allowed search engines (if empty, all engines are available)
-  allowedSearchEngines: string[];
-  // Proxy configuration
-  proxyUrl?: string;
-  useProxy: boolean;
-  // CORS configuration
-  enableCors: boolean;
-  corsOrigin: string;
-  // Server configuration (determined by MODE env var: 'both', 'http', or 'stdio')
-  enableHttpServer: boolean;
-}
+import { Context, Effect, Layer, Schema, pipe } from "effect";
 
-// Read from environment variables or use defaults
-export const config: AppConfig = {
-  // Search engine configuration
-  defaultSearchEngine:
-    (process.env.DEFAULT_SEARCH_ENGINE as AppConfig["defaultSearchEngine"]) ||
-    "brave",
-  // Parse comma-separated list of allowed search engines
-  allowedSearchEngines: process.env.ALLOWED_SEARCH_ENGINES
-    ? process.env.ALLOWED_SEARCH_ENGINES.split(",").map((e) => e.trim())
-    : [],
-  // Proxy configuration
-  proxyUrl: process.env.PROXY_URL || "http://127.0.0.1:10809",
-  useProxy: process.env.USE_PROXY === "true",
-  // CORS configuration
-  enableCors: process.env.ENABLE_CORS === "true",
-  corsOrigin: process.env.CORS_ORIGIN || "*",
-  // Server configuration - determined by MODE environment variable
-  // Modes: 'both' (default), 'http', 'stdio'
-  enableHttpServer: process.env.MODE
-    ? ["both", "http"].includes(process.env.MODE)
-    : true,
+export const supportedSearchEngines = ["bing", "duckduckgo", "brave"] as const;
+
+export type SupportedEngine = (typeof supportedSearchEngines)[number];
+
+const SupportedEngineSchema = Schema.Literal(...supportedSearchEngines);
+
+const AppConfigSchema = Schema.Struct({
+  defaultSearchEngine: SupportedEngineSchema,
+  allowedSearchEngines: Schema.Array(Schema.String),
+  proxyUrl: Schema.optional(Schema.String),
+  useProxy: Schema.Boolean,
+  enableCors: Schema.Boolean,
+  corsOrigin: Schema.String,
+  enableHttpServer: Schema.Boolean,
+});
+
+export type AppConfig = Schema.Schema.Type<typeof AppConfigSchema>;
+
+export const AppConfigTag = Context.GenericTag<AppConfig>("AppConfig");
+
+const readEnv = Effect.sync(() => ({ ...process.env }));
+
+const parseAllowedEngines = (raw: string | undefined) =>
+  raw
+    ? raw
+        .split(",")
+        .map((engine) => engine.trim().toLowerCase())
+        .filter((engine) => engine.length > 0)
+    : [];
+
+const normalizeDefaultEngine = (
+  candidate: string | undefined,
+): SupportedEngine => {
+  if (
+    candidate &&
+    supportedSearchEngines.includes(candidate as SupportedEngine)
+  ) {
+    return candidate as SupportedEngine;
+  }
+  return "brave";
 };
 
-// Valid search engines list
-const validSearchEngines = ["bing", "duckduckgo", "brave"];
+const buildConfigEffect = Effect.gen(function* (_) {
+  const env = yield* _(readEnv);
 
-// Validate default search engine
-if (!validSearchEngines.includes(config.defaultSearchEngine)) {
-  console.error(
-    `Invalid DEFAULT_SEARCH_ENGINE: "${config.defaultSearchEngine}", falling back to "brave"`,
+  let defaultSearchEngine = normalizeDefaultEngine(env.DEFAULT_SEARCH_ENGINE);
+  const rawAllowed = parseAllowedEngines(env.ALLOWED_SEARCH_ENGINES);
+  const filteredAllowed = rawAllowed.filter(
+    (engine): engine is SupportedEngine =>
+      supportedSearchEngines.includes(engine as SupportedEngine),
   );
-  config.defaultSearchEngine = "brave";
-}
 
-// Validate allowed search engines
-if (config.allowedSearchEngines.length > 0) {
-  // Filter out invalid engines
-  const invalidEngines = config.allowedSearchEngines.filter(
-    (engine) => !validSearchEngines.includes(engine),
-  );
-  if (invalidEngines.length > 0) {
-    console.error(
-      `Invalid search engines detected and will be ignored: ${invalidEngines.join(", ")}`,
+  if (rawAllowed.length > 0 && filteredAllowed.length === 0) {
+    yield* _(
+      Effect.sync(() => {
+        console.error(
+          `Invalid ALLOWED_SEARCH_ENGINES specified: ${rawAllowed.join(", ")}. All values ignored; all engines enabled.
+`,
+        );
+      }),
+    );
+  } else if (filteredAllowed.length !== rawAllowed.length) {
+    const invalid = rawAllowed.filter(
+      (engine) => !supportedSearchEngines.includes(engine as SupportedEngine),
+    );
+    yield* _(
+      Effect.sync(() => {
+        console.error(
+          `Invalid search engines detected and ignored: ${invalid.join(", ")}`,
+        );
+      }),
     );
   }
-  config.allowedSearchEngines = config.allowedSearchEngines.filter((engine) =>
-    validSearchEngines.includes(engine),
-  );
 
-  // If all engines were invalid, don't restrict (allow all engines)
-  if (config.allowedSearchEngines.length === 0) {
-    console.error(
-      `No valid search engines specified in the allowed list, all engines will be available`,
+  const allowedSearchEngines =
+    filteredAllowed.length > 0 ? filteredAllowed : [];
+
+  if (
+    allowedSearchEngines.length > 0 &&
+    !allowedSearchEngines.includes(defaultSearchEngine)
+  ) {
+    const updatedDefault = allowedSearchEngines[0];
+    yield* _(
+      Effect.sync(() => {
+        console.error(
+          `Default search engine "${defaultSearchEngine}" is not allowed. Using "${updatedDefault}" instead.`,
+        );
+      }),
     );
+    defaultSearchEngine = updatedDefault;
   }
-  // Check if default engine is in the allowed list
-  else if (!config.allowedSearchEngines.includes(config.defaultSearchEngine)) {
-    console.error(
-      `Default search engine "${config.defaultSearchEngine}" is not in the allowed engines list`,
-    );
-    // Update the default engine to the first allowed engine
-    config.defaultSearchEngine = config
-      .allowedSearchEngines[0] as AppConfig["defaultSearchEngine"];
-    console.error(
-      `Default search engine updated to "${config.defaultSearchEngine}"`,
-    );
-  }
-}
 
-// Log configuration
-console.error(`🔍 Default search engine: ${config.defaultSearchEngine}`);
-if (config.allowedSearchEngines.length > 0) {
-  console.error(
-    `🔍 Allowed search engines: ${config.allowedSearchEngines.join(", ")}`,
+  const useProxy = env.USE_PROXY === "true";
+  const proxyUrl =
+    env.PROXY_URL ?? (useProxy ? "http://127.0.0.1:10809" : undefined);
+  const enableCors = env.ENABLE_CORS === "true";
+  const corsOrigin = env.CORS_ORIGIN ?? "*";
+  const enableHttpServer = env.MODE
+    ? ["both", "http"].includes(env.MODE)
+    : true;
+
+  const baseConfig = {
+    defaultSearchEngine,
+    allowedSearchEngines,
+    proxyUrl,
+    useProxy,
+    enableCors,
+    corsOrigin,
+    enableHttpServer,
+  } satisfies AppConfig;
+
+  const config = pipe(baseConfig, Schema.decodeUnknownSync(AppConfigSchema));
+
+  yield* _(
+    Effect.sync(() => {
+      console.error(`🔍 Default search engine: ${config.defaultSearchEngine}`);
+    }),
   );
-} else {
-  console.error(
-    `🔍 No search engine restrictions, all available engines can be used`,
-  );
-}
 
-if (config.useProxy) {
-  console.error(`🌐 Using proxy: ${config.proxyUrl}`);
-} else {
-  console.error(`🌐 No proxy configured (set USE_PROXY=true to enable)`);
-}
-
-// Determine server mode from config
-const mode = process.env.MODE || (config.enableHttpServer ? "both" : "stdio");
-console.error(`🖥️ Server mode: ${mode.toUpperCase()}`);
-
-if (config.enableHttpServer) {
-  if (config.enableCors) {
-    console.error(`🔒 CORS enabled with origin: ${config.corsOrigin}`);
+  if (config.allowedSearchEngines.length > 0) {
+    yield* _(
+      Effect.sync(() => {
+        console.error(
+          `🔍 Allowed search engines: ${config.allowedSearchEngines.join(", ")}`,
+        );
+      }),
+    );
   } else {
-    console.error(`🔒 CORS disabled (set ENABLE_CORS=true to enable)`);
+    yield* _(
+      Effect.sync(() => {
+        console.error(
+          `🔍 No search engine restrictions, all engines can be used`,
+        );
+      }),
+    );
   }
-}
 
-/**
- * Helper function to get the proxy URL if proxy is enabled
- */
-export function getProxyUrl(): string | undefined {
-  return config.useProxy ? encodeURI(<string>config.proxyUrl) : undefined;
-}
+  if (config.useProxy) {
+    yield* _(
+      Effect.sync(() => {
+        console.error(`🌐 Using proxy: ${config.proxyUrl}`);
+      }),
+    );
+  } else {
+    yield* _(
+      Effect.sync(() => {
+        console.error(`🌐 No proxy configured (set USE_PROXY=true to enable)`);
+      }),
+    );
+  }
+
+  const mode = env.MODE ?? (config.enableHttpServer ? "both" : "stdio");
+  yield* _(
+    Effect.sync(() => {
+      console.error(`🖥️ Server mode: ${mode.toUpperCase()}`);
+    }),
+  );
+
+  if (config.enableHttpServer) {
+    if (config.enableCors) {
+      yield* _(
+        Effect.sync(() => {
+          console.error(`🔒 CORS enabled with origin: ${config.corsOrigin}`);
+        }),
+      );
+    } else {
+      yield* _(
+        Effect.sync(() => {
+          console.error(`🔒 CORS disabled (set ENABLE_CORS=true to enable)`);
+        }),
+      );
+    }
+  }
+
+  return config;
+});
+
+export const AppConfigLayer = Layer.effect(AppConfigTag, buildConfigEffect);
+
+export const getConfig = AppConfigTag;
+
+export const getProxyUrl = () =>
+  Effect.map(getConfig, (config) =>
+    config.useProxy && config.proxyUrl ? encodeURI(config.proxyUrl) : undefined,
+  );

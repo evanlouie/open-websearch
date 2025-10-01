@@ -1,130 +1,144 @@
-// tools/setupTools.ts
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { searchBing } from "../engines/bing.js";
-import { SearchResult } from "../types.js";
+import { Effect } from "effect";
 import { z } from "zod";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { SearchEngineError, type SearchResult } from "../types.js";
+import { searchBing } from "../engines/bing.js";
 import { searchDuckDuckGo } from "../engines/duckduckgo.js";
-import { config } from "../config.js";
 import { searchBrave } from "../engines/brave.js";
+import {
+  AppConfig,
+  AppConfigTag,
+  getConfig,
+  supportedSearchEngines,
+  type SupportedEngine,
+} from "../config.js";
 
-// Supported search engines
-const SUPPORTED_ENGINES = ["bing", "duckduckgo", "brave"] as const;
-type SupportedEngine = (typeof SUPPORTED_ENGINES)[number];
+const SUPPORTED_ENGINES = supportedSearchEngines;
 
-// Search engine function mapping
 const engineMap: Record<
   SupportedEngine,
-  (query: string, limit: number) => Promise<SearchResult[]>
+  (
+    query: string,
+    limit: number,
+  ) => Effect.Effect<SearchResult[], SearchEngineError, AppConfig>
 > = {
   bing: searchBing,
   duckduckgo: searchDuckDuckGo,
   brave: searchBrave,
 };
 
-// Distribute search result limits
 const distributeLimit = (totalLimit: number, engineCount: number): number[] => {
   const base = Math.floor(totalLimit / engineCount);
   const remainder = totalLimit % engineCount;
 
   return Array.from(
     { length: engineCount },
-    (_, i) => base + (i < remainder ? 1 : 0),
+    (_, index) => base + (index < remainder ? 1 : 0),
   );
 };
 
-// Execute multi-query search with per-engine sequential, cross-engine parallel execution
-const executeMultiQuerySearch = async (
+interface EngineQueryResult {
+  query: string;
+  engine: string;
+  results: SearchResult[];
+}
+
+interface AggregatedQueryResult {
+  query: string;
+  engines: SupportedEngine[];
+  totalResults: number;
+  results: SearchResult[];
+}
+
+const executeMultiQuerySearch = (
   queries: string[],
-  engines: string[],
+  engines: SupportedEngine[],
   limit: number,
-): Promise<
-  Array<{
-    query: string;
-    engines: string[];
-    totalResults: number;
-    results: SearchResult[];
-  }>
-> => {
-  // Deduplicate queries after trimming to avoid redundant searches
-  const cleanedQueries = queries.map((q) => q.trim());
-  const uniqueQueries = [...new Set(cleanedQueries)];
+  config: AppConfig,
+): Effect.Effect<AggregatedQueryResult[], never, never> =>
+  Effect.gen(function* (_) {
+    const cleanedQueries = queries.map((query) => query.trim());
+    const uniqueQueries = [...new Set(cleanedQueries)];
+    const limits = distributeLimit(limit, engines.length);
 
-  console.error(
-    `[DEBUG] Executing multi-query search, original queries: [${queries.map((q) => `"${q}"`).join(", ")}], unique queries after deduplication: [${uniqueQueries.map((q) => `"${q}"`).join(", ")}], engines: ${engines.join(", ")}, limit: ${limit}`,
-  );
-
-  const limits = distributeLimit(limit, engines.length);
-
-  // For each engine, process all unique queries sequentially
-  const engineTasks = engines.map(async (engine, engineIndex) => {
-    const engineLimit = limits[engineIndex];
-    const searchFn = engineMap[engine as SupportedEngine];
-
-    if (!searchFn) {
-      console.error(`Unsupported search engine: ${engine}`);
-      return uniqueQueries.map((q) => ({
-        query: q,
-        engine,
-        results: [] as SearchResult[],
-      }));
-    }
-
-    const engineResults: Array<{
-      query: string;
-      engine: string;
-      results: SearchResult[];
-    }> = [];
-
-    // Process unique queries sequentially for this engine
-    for (const query of uniqueQueries) {
-      if (!query) {
-        console.error(`Query string is empty after trimming`);
-        engineResults.push({ query, engine, results: [] });
-        continue;
-      }
-
-      try {
-        const results = await searchFn(query, engineLimit);
-        engineResults.push({ query, engine, results });
-      } catch (error) {
+    yield* _(
+      Effect.sync(() => {
         console.error(
-          `Search failed for engine ${engine}, query "${query}":`,
-          error,
+          `[DEBUG] Executing multi-query search, original queries: [${queries
+            .map((q) => `"${q}"`)
+            .join(", ")}], unique queries after deduplication: [${uniqueQueries
+            .map((q) => `"${q}"`)
+            .join(", ")}], engines: ${engines.join(", ")}, limit: ${limit}`,
         );
-        engineResults.push({ query, engine, results: [] });
-      }
-    }
+      }),
+    );
 
-    return engineResults;
+    const engineEffects = engines.map((engine, engineIndex) => {
+      const searchFn = engineMap[engine];
+      const engineLimit = limits[engineIndex];
+
+      return Effect.forEach(uniqueQueries, (query) => {
+        if (!query) {
+          return Effect.succeed<EngineQueryResult>({
+            query,
+            engine,
+            results: [],
+          });
+        }
+
+        const effect = searchFn(query, engineLimit).pipe(
+          Effect.provideService(AppConfigTag, config),
+          Effect.map(
+            (results): EngineQueryResult => ({
+              query,
+              engine,
+              results,
+            }),
+          ),
+          Effect.tapError((error) =>
+            Effect.sync(() => {
+              console.error(
+                `Search failed for engine ${engine}, query "${query}":`,
+                error,
+              );
+            }),
+          ),
+          Effect.orElseSucceed(() => ({
+            query,
+            engine,
+            results: [],
+          })),
+        );
+
+        return effect;
+      });
+    });
+
+    const allEngineResults = yield* _(
+      Effect.all(engineEffects, { concurrency: "unbounded" }),
+    );
+
+    return cleanedQueries.map<AggregatedQueryResult>((originalQuery) => {
+      const aggregatedResults: SearchResult[] = [];
+
+      for (const engineResults of allEngineResults) {
+        const match = engineResults.find(
+          (result) => result.query === originalQuery,
+        );
+        if (match) {
+          aggregatedResults.push(...match.results);
+        }
+      }
+
+      return {
+        query: originalQuery,
+        engines,
+        totalResults: aggregatedResults.length,
+        results: aggregatedResults.slice(0, limit),
+      };
+    });
   });
 
-  // Run all engine tasks in parallel
-  const allEngineResults = await Promise.all(engineTasks);
-
-  // Map results back to original query positions (preserving order and duplicates)
-  return cleanedQueries.map((originalQuery) => {
-    const queryResults: SearchResult[] = [];
-
-    // Collect results from all engines for this query
-    for (const engineResults of allEngineResults) {
-      const engineQueryResult = engineResults.find(
-        (r) => r.query === originalQuery,
-      );
-      if (engineQueryResult) {
-        queryResults.push(...engineQueryResult.results);
-      }
-    }
-
-    return {
-      query: originalQuery,
-      engines,
-      totalResults: queryResults.length,
-      results: queryResults.slice(0, limit),
-    };
-  });
-};
-
-// Define output schema for search tool
 const SearchResultSchema = z.object({
   title: z.string(),
   url: z.string(),
@@ -144,115 +158,130 @@ const SearchOutputSchema = {
   ),
 };
 
-export const setupTools = (server: McpServer): void => {
-  // Search tool
-  // Generate dynamic description for search tool
-  const getSearchDescription = () => {
-    const bingWarning =
-      "⚠️ WARNING: Bing is currently experiencing issues and may not return results. Recommended engines: Brave or DuckDuckGo. ";
-    if (config.allowedSearchEngines.length === 0) {
-      return (
-        bingWarning +
-        "Search the web using Bing, Brave, or DuckDuckGo. Supports single or multiple queries (max 10). No API key required."
-      );
-    } else {
-      const enginesText = config.allowedSearchEngines
-        .map((e) => e.charAt(0).toUpperCase() + e.slice(1))
-        .join(", ");
-      const hasBing = config.allowedSearchEngines.includes("bing");
-      return (
-        (hasBing ? bingWarning : "") +
-        `Search the web using these engines: ${enginesText}. Supports single or multiple queries (max 10). No API key required.`
-      );
-    }
-  };
+const resolveAllowedEngines = (config: AppConfig): SupportedEngine[] =>
+  config.allowedSearchEngines.length > 0
+    ? (config.allowedSearchEngines as SupportedEngine[])
+    : [...SUPPORTED_ENGINES];
 
-  // Generate enumeration of search engine options
-  const getEnginesEnum = () => {
-    // If no restrictions, use all supported engines
-    const allowedEngines =
-      config.allowedSearchEngines.length > 0
-        ? config.allowedSearchEngines
-        : [...SUPPORTED_ENGINES];
+const toEngineEnum = (engines: SupportedEngine[]) =>
+  z.enum(engines as [SupportedEngine, ...SupportedEngine[]]);
 
-    return z.enum(allowedEngines as [string, ...string[]]);
-  };
+const buildSearchDescription = (config: AppConfig): string => {
+  const bingWarning =
+    "⚠️ WARNING: Bing is currently experiencing issues and may not return results. Recommended engines: Brave or DuckDuckGo. ";
+  const engines = resolveAllowedEngines(config);
 
-  server.registerTool(
-    "search",
-    {
-      description: getSearchDescription(),
-      inputSchema: {
-        query: z
-          .array(z.string().min(1, "Search query must not be empty"))
-          .min(1, "At least one query is required")
-          .max(10, "Maximum 10 queries allowed")
-          .describe(
-            'Array of search queries. For single query, use ["query text"]. For multiple queries, use ["query1", "query2", "query3"]. Maximum 10 queries per request.',
-          ),
-        limit: z
-          .number()
-          .min(1)
-          .max(50)
-          .default(10)
-          .describe(
-            "Number type: Maximum number of results to return per query (default: 10, range: 1-50)",
-          ),
-        engines: z
-          .array(getEnginesEnum())
-          .min(1)
-          .default([config.defaultSearchEngine])
-          .describe(
-            `Array of strings: Search engines to use. Example: ["brave", "duckduckgo"]. Default: ["${config.defaultSearchEngine}"]`,
-          )
-          .transform((requestedEngines) => {
-            // If allowed search engines are configured, filter requested engines
-            if (config.allowedSearchEngines.length > 0) {
-              const filteredEngines = requestedEngines.filter((engine) =>
-                config.allowedSearchEngines.includes(engine),
-              );
+  if (config.allowedSearchEngines.length === 0) {
+    return (
+      bingWarning +
+      "Search the web using Bing, Brave, or DuckDuckGo. Supports single or multiple queries (max 10). No API key required."
+    );
+  }
 
-              // If all requested engines are filtered out, use default engine
-              return filteredEngines.length > 0
-                ? filteredEngines
-                : [config.defaultSearchEngine];
-            }
-            return requestedEngines;
-          }),
-      },
-      outputSchema: SearchOutputSchema,
-    },
-    async ({ query, limit = 10, engines = ["bing"] }) => {
-      try {
-        console.error(
-          `Searching for ${query.length} ${query.length === 1 ? "query" : "queries"}: [${query.map((q: string) => `"${q}"`).join(", ")}] using engines: ${engines.join(", ")}`,
-        );
+  const enginesText = engines
+    .map((engine) => engine.charAt(0).toUpperCase() + engine.slice(1))
+    .join(", ");
+  const hasBing = engines.includes("bing");
 
-        const results = await executeMultiQuerySearch(query, engines, limit);
-
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({ results }, null, 2),
-            },
-          ],
-          structuredContent: {
-            results,
-          },
-        };
-      } catch (error) {
-        console.error("Search tool execution failed:", error);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Search failed: ${error instanceof Error ? error.message : "Unknown error"}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
+  return (
+    (hasBing ? bingWarning : "") +
+    `Search the web using these engines: ${enginesText}. Supports single or multiple queries (max 10). No API key required.`
   );
 };
+
+export const setupTools = (server: McpServer) =>
+  Effect.gen(function* (_) {
+    const config = yield* _(getConfig);
+    const allowedEngines = resolveAllowedEngines(config);
+    const enginesEnum = toEngineEnum(allowedEngines);
+
+    yield* _(
+      Effect.sync(() => {
+        server.registerTool(
+          "search",
+          {
+            description: buildSearchDescription(config),
+            inputSchema: {
+              query: z
+                .array(z.string().min(1, "Search query must not be empty"))
+                .min(1, "At least one query is required")
+                .max(10, "Maximum 10 queries allowed")
+                .describe(
+                  'Array of search queries. For single query, use ["query text"]. For multiple queries, use ["query1", "query2", "query3"]. Maximum 10 queries per request.',
+                ),
+              limit: z
+                .number()
+                .min(1)
+                .max(50)
+                .default(10)
+                .describe(
+                  "Number type: Maximum number of results to return per query (default: 10, range: 1-50)",
+                ),
+              engines: z
+                .array(enginesEnum)
+                .min(1)
+                .default([config.defaultSearchEngine])
+                .describe(
+                  `Array of strings: Search engines to use. Example: ["brave", "duckduckgo"]. Default: ["${config.defaultSearchEngine}"]`,
+                )
+                .transform((requestedEngines) => {
+                  if (config.allowedSearchEngines.length > 0) {
+                    const filtered = requestedEngines.filter((engine) =>
+                      config.allowedSearchEngines.includes(engine),
+                    );
+
+                    return filtered.length > 0
+                      ? filtered
+                      : [config.defaultSearchEngine];
+                  }
+                  return requestedEngines;
+                }),
+            },
+            outputSchema: SearchOutputSchema,
+          },
+          async ({
+            query,
+            limit = 10,
+            engines = [config.defaultSearchEngine],
+          }) => {
+            const effectiveEngines = engines as SupportedEngine[];
+
+            const effect = executeMultiQuerySearch(
+              query,
+              effectiveEngines,
+              limit,
+              config,
+            );
+
+            try {
+              const results = await Effect.runPromise(effect);
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify({ results }, null, 2),
+                  },
+                ],
+                structuredContent: { results },
+              };
+            } catch (error) {
+              const message =
+                error instanceof Error ? error.message : "Unknown error";
+              console.error("Search tool execution failed:", error);
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Search failed: ${message}`,
+                  },
+                ],
+                isError: true,
+              };
+            }
+          },
+        );
+      }),
+    );
+  });

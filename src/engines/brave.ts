@@ -1,20 +1,12 @@
 import axios, { AxiosRequestConfig } from "axios";
 import * as cheerio from "cheerio";
-import { SearchResult } from "../types.js";
-import { getProxyUrl } from "../config.js";
+import { Effect } from "effect";
 import { HttpsProxyAgent } from "https-proxy-agent";
+import { getProxyUrl, type AppConfig } from "../config.js";
+import { SearchEngineError, type SearchResult } from "../types.js";
 
-export async function searchBrave(
-  query: string,
-  limit: number,
-): Promise<SearchResult[]> {
-  let allResults: SearchResult[] = [];
-  let pn = 0;
-  // use the proxy from environment variables
-  const effectiveProxyUrl = getProxyUrl();
-
-  // Configure request options
-  const requestOptions: AxiosRequestConfig = {
+const createRequestOptions = (proxyUrl?: string): AxiosRequestConfig => {
+  const options: AxiosRequestConfig = {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36",
@@ -32,71 +24,99 @@ export async function searchBrave(
       "sec-fetch-user": "?1",
       "sec-fetch-dest": "document",
       referer: "https://duckduckgo.com/",
-      "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "accept-language": "en-US,en;q=0.9",
     },
   };
 
-  // If a proxy URL is provided, use it
-  if (effectiveProxyUrl) {
-    const proxyAgent = new HttpsProxyAgent(effectiveProxyUrl);
-    requestOptions.httpAgent = proxyAgent;
-    requestOptions.httpsAgent = proxyAgent;
+  if (proxyUrl) {
+    const proxyAgent = new HttpsProxyAgent(proxyUrl);
+    options.httpAgent = proxyAgent;
+    options.httpsAgent = proxyAgent;
   }
 
-  const encodedQuery = encodeURIComponent(query);
-  while (allResults.length < limit) {
-    const response = await axios.get(
-      `https://search.brave.com/search?q=${encodedQuery}&source=web&offset=${pn}`,
-      requestOptions,
-    );
+  return options;
+};
 
-    const $ = cheerio.load(response.data);
-    const results: SearchResult[] = [];
+const fetchResults = (
+  query: string,
+  offset: number,
+  options: AxiosRequestConfig,
+) =>
+  Effect.tryPromise({
+    try: () =>
+      axios.get(
+        `https://search.brave.com/search?q=${encodeURIComponent(query)}&source=web&offset=${offset}`,
+        options,
+      ),
+    catch: (cause) =>
+      new SearchEngineError(
+        "brave",
+        `Failed to fetch Brave search results for query "${query}"`,
+        { cause },
+      ),
+  });
 
-    // Select the main container for all search results
-    const resultsContainer = $("#results");
+const parseResults = (html: string): SearchResult[] => {
+  const $ = cheerio.load(html);
+  const results: SearchResult[] = [];
 
-    // Find each result snippet within the container
-    resultsContainer.find(".snippet").each((index, element) => {
-      const resultElement = $(element);
+  const resultsContainer = $("#results");
+  resultsContainer.find(".snippet").each((_, element) => {
+    const resultElement = $(element);
+    const title = resultElement.find(".title").text().trim();
+    const url = resultElement.find("a.heading-serpresult").attr("href");
+    const description = resultElement
+      .find(".snippet-description")
+      .text()
+      .trim();
+    const source = resultElement.find(".sitename").text().trim();
 
-      // Extract the title
-      const titleElement = resultElement.find(".title");
-      const title = titleElement.text().trim();
+    if (title && url) {
+      results.push({
+        title,
+        url,
+        description,
+        source,
+        engine: "brave",
+      });
+    }
+  });
 
-      // Extract the URL from the main link
-      const linkElement = resultElement.find("a.heading-serpresult");
-      const url = linkElement.attr("href");
+  return results;
+};
 
-      // Extract the description/snippet
-      const snippetElement = resultElement.find(".snippet-description");
-      const description = snippetElement.text().trim() || "";
+export const searchBrave = (
+  query: string,
+  limit: number,
+): Effect.Effect<SearchResult[], SearchEngineError, AppConfig> =>
+  Effect.gen(function* (_) {
+    const proxyUrl = yield* _(getProxyUrl());
+    const requestOptions = createRequestOptions(proxyUrl);
 
-      // Extract the source/sitename
-      const sourceElement = resultElement.find(".sitename");
-      const source = sourceElement.text().trim() || "";
+    let allResults: SearchResult[] = [];
+    let offset = 0;
 
-      // Ensure that we have a valid title and URL before adding
-      if (title && url) {
-        results.push({
-          title: title,
-          url: url,
-          description: description,
-          source: source,
-          engine: "bing",
-        });
+    while (allResults.length < limit) {
+      const response = yield* _(fetchResults(query, offset, requestOptions));
+      const pageResults = yield* _(
+        Effect.sync(() => parseResults(response.data)),
+      );
+
+      allResults = allResults.concat(pageResults);
+
+      if (pageResults.length === 0) {
+        yield* _(
+          Effect.sync(() => {
+            console.error(
+              "⚠️ Brave returned no additional results, ending early.",
+            );
+          }),
+        );
+        break;
       }
-    });
 
-    allResults = allResults.concat(results);
-
-    if (results.length === 0) {
-      console.error("⚠️ No more results, ending early....");
-      break;
+      offset += 1;
     }
 
-    pn += 1;
-  }
-
-  return allResults.slice(0, limit); // Take at most limit results
-}
+    return allResults.slice(0, limit);
+  });

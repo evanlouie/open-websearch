@@ -1,5 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { Effect } from "effect";
 import { createMcpServer, createHttpServer } from "./server.js";
+import { AppConfigLayer } from "./config.js";
 import type { Server } from "node:http";
 
 describe("HTTP Server Integration Tests", () => {
@@ -9,12 +11,16 @@ describe("HTTP Server Integration Tests", () => {
 
   beforeAll(async () => {
     // Create MCP server
-    const mcpServer = createMcpServer();
+    const mcpServer = await Effect.runPromise(
+      createMcpServer.pipe(Effect.provide(AppConfigLayer)),
+    );
 
     // Create HTTP server without CORS
-    server = createHttpServer(mcpServer, {
-      enableCors: false,
-    });
+    server = await Effect.runPromise(
+      createHttpServer(mcpServer, {
+        enableCors: false,
+      }).pipe(Effect.provide(AppConfigLayer)),
+    );
 
     // Listen on random port
     await new Promise<void>((resolve) => {
@@ -214,13 +220,17 @@ describe("HTTP Server with CORS", () => {
 
   beforeAll(async () => {
     // Create MCP server
-    const mcpServer = createMcpServer();
+    const mcpServer = await Effect.runPromise(
+      createMcpServer.pipe(Effect.provide(AppConfigLayer)),
+    );
 
     // Create HTTP server WITH CORS
-    server = createHttpServer(mcpServer, {
-      enableCors: true,
-      corsOrigin: "https://example.com",
-    });
+    server = await Effect.runPromise(
+      createHttpServer(mcpServer, {
+        enableCors: true,
+        corsOrigin: "https://example.com",
+      }).pipe(Effect.provide(AppConfigLayer)),
+    );
 
     // Listen on random port
     await new Promise<void>((resolve) => {
@@ -288,8 +298,12 @@ describe("HTTP Server with CORS", () => {
 
 describe("Server Port Configuration", () => {
   test("Server starts on PORT=0 and assigns random port", async () => {
-    const mcpServer = createMcpServer();
-    const server = createHttpServer(mcpServer);
+    const mcpServer = await Effect.runPromise(
+      createMcpServer.pipe(Effect.provide(AppConfigLayer)),
+    );
+    const server = await Effect.runPromise(
+      createHttpServer(mcpServer).pipe(Effect.provide(AppConfigLayer)),
+    );
 
     // Listen on port 0 (auto-assign)
     await new Promise<void>((resolve) => {
@@ -316,8 +330,12 @@ describe("Server Port Configuration", () => {
   });
 
   test("Server starts on custom port", async () => {
-    const mcpServer = createMcpServer();
-    const server = createHttpServer(mcpServer);
+    const mcpServer = await Effect.runPromise(
+      createMcpServer.pipe(Effect.provide(AppConfigLayer)),
+    );
+    const server = await Effect.runPromise(
+      createHttpServer(mcpServer).pipe(Effect.provide(AppConfigLayer)),
+    );
     const customPort = 54321; // Using a high port number to avoid conflicts
 
     // Listen on custom port

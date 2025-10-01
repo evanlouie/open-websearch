@@ -1,53 +1,98 @@
 #!/usr/bin/env bun
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { config } from "./config.js";
-import { createMcpServer, createHttpServer } from "./server.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Server } from "node:http";
+import { Effect } from "effect";
+import { AppConfigLayer, getConfig, type AppConfig } from "./config.js";
+import { createHttpServer, createMcpServer } from "./server.js";
 
-async function main() {
-  // Create MCP server with tools configured
-  const server = createMcpServer();
+const connectStdioTransport = (server: McpServer) =>
+  Effect.gen(function* (_) {
+    const transport = new StdioServerTransport();
 
-  // Enable STDIO mode if MODE is 'both' or 'stdio' or not specified
-  if (
-    process.env.MODE === undefined ||
-    process.env.MODE === "both" ||
-    process.env.MODE === "stdio"
-  ) {
-    console.error("🔌 Starting STDIO transport...");
-    const stdioTransport = new StdioServerTransport();
-    await server
-      .connect(stdioTransport)
-      .then(() => {
-        console.error("✅ STDIO transport enabled");
-      })
-      .catch((error) => {
-        console.error("❌ Failed to initialize STDIO transport:", error);
-      });
+    yield* _(
+      Effect.sync(() => console.error("🔌 Starting STDIO transport...")),
+    );
+
+    yield* _(
+      Effect.tryPromise<void, Error>({
+        try: () => server.connect(transport),
+        catch: (cause) =>
+          cause instanceof Error ? cause : new Error(String(cause)),
+      }),
+    );
+
+    yield* _(Effect.sync(() => console.error("✅ STDIO transport enabled")));
+  });
+
+const listenHttpServer = (server: Server, port: number) =>
+  Effect.tryPromise<void, Error>({
+    try: () =>
+      new Promise((resolve) => {
+        server.listen(port, "0.0.0.0", () => {
+          const address = server.address();
+          const actualPort =
+            typeof address === "object" && address !== null
+              ? address.port
+              : port;
+          console.error(`✅ HTTP server running on port ${actualPort}`);
+          resolve();
+        });
+      }),
+    catch: (cause) =>
+      cause instanceof Error ? cause : new Error(String(cause)),
+  });
+
+const startHttpServer = (
+  mcpServer: McpServer,
+  port: number,
+  config: AppConfig,
+) =>
+  Effect.gen(function* (_) {
+    yield* _(Effect.sync(() => console.error("🔌 Starting HTTP server...")));
+
+    const httpServer = yield* _(
+      createHttpServer(mcpServer, {
+        enableCors: config.enableCors,
+        corsOrigin: config.corsOrigin,
+      }),
+    );
+
+    yield* _(listenHttpServer(httpServer, port));
+  });
+
+const determinePort = Effect.sync(() =>
+  process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+);
+
+const shouldEnableStdio = Effect.sync(() => {
+  const mode = process.env.MODE;
+  return mode === undefined || mode === "both" || mode === "stdio";
+});
+
+const program = Effect.gen(function* (_) {
+  const config = yield* _(getConfig);
+  const server = yield* _(createMcpServer);
+
+  if (yield* _(shouldEnableStdio)) {
+    yield* _(connectStdioTransport(server));
   }
 
-  // Only set up HTTP server if enabled
   if (config.enableHttpServer) {
-    console.error("🔌 Starting HTTP server...");
-
-    // Create HTTP server with MCP transports
-    const httpServer = createHttpServer(server, {
-      enableCors: config.enableCors,
-      corsOrigin: config.corsOrigin,
-    });
-
-    // Read the port number from the environment variable; use the default port 3000 if it is not set.
-    // Setting PORT=0 will let the OS automatically assign an available port
-    const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-
-    httpServer.listen(PORT, "0.0.0.0", () => {
-      const address = httpServer.address();
-      const actualPort =
-        typeof address === "object" && address !== null ? address.port : PORT;
-      console.error(`✅ HTTP server running on port ${actualPort}`);
-    });
+    const port = yield* _(determinePort);
+    yield* _(startHttpServer(server, port, config));
   } else {
-    console.error("ℹ️ HTTP server disabled, running in STDIO mode only");
+    yield* _(
+      Effect.sync(() => {
+        console.error("ℹ️ HTTP server disabled, running in STDIO mode only");
+      }),
+    );
   }
-}
+});
 
-main().catch(console.error);
+Effect.runPromise(program.pipe(Effect.provide(AppConfigLayer))).catch(
+  (error) => {
+    console.error("❌ Failed to start server:", error);
+    process.exit(1);
+  },
+);
