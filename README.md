@@ -336,7 +336,6 @@ The tool always returns an MCP response with two content items:
 Since this tool works by scraping multi-engine search results, please note the following important limitations:
 
 1. **Rate Limiting**:
-
    - Too many searches in a short time may cause the used engines to temporarily block requests
    - Multi-query searches are designed to minimize rate limit risks:
      - Queries are executed **sequentially** for each engine (one at a time)
@@ -349,19 +348,16 @@ Since this tool works by scraping multi-engine search results, please note the f
      - Add delays between large batch requests when necessary
 
 2. **Result Accuracy**:
-
    - Depends on the HTML structure of corresponding engines, may fail when engines update
    - Some results may lack metadata like descriptions
    - Complex search operators may not work as expected
 
 3. **Legal Terms**:
-
    - This tool is for personal use only
    - Please comply with the terms of service of corresponding engines
    - Implement appropriate rate limiting based on your actual use case
 
 4. **Search Engine Configuration**:
-
    - Default search engine can be set via the `DEFAULT_SEARCH_ENGINE` environment variable
    - Supported engines: bing (currently has issues), duckduckgo, brave
    - The default engine is brave

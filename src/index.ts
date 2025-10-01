@@ -2,7 +2,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Server } from "node:http";
-import { Cause, Effect, Either, Option, pipe } from "effect";
+import { Cause, Effect, Either, Match, Option, pipe } from "effect";
 import { AppConfigLayer, getConfig, type AppConfig } from "./config.js";
 import { createHttpServer, createMcpServer } from "./server.js";
 import { StderrLoggerLayer } from "./logging.js";
@@ -91,19 +91,19 @@ const parseRuntimeMode = (
     modeOption,
     Option.map((mode) => mode.trim().toLowerCase()),
     Option.match({
-      onNone: () =>
-        Either.right<RuntimeMode>("both") as Either.Either<RuntimeMode, Error>,
-      onSome: (value) => {
-        if (value === "both" || value === "http" || value === "stdio") {
-          return Either.right(value as RuntimeMode) as Either.Either<
-            RuntimeMode,
-            Error
-          >;
-        }
-        return Either.left(
-          new Error(`Unsupported MODE value "${value}" provided.`),
-        ) as Either.Either<RuntimeMode, Error>;
-      },
+      onNone: () => Either.right("both") as Either.Either<RuntimeMode, Error>,
+      onSome: (value) =>
+        pipe(
+          Match.value(value),
+          Match.when("both", () => Either.right<RuntimeMode>("both")),
+          Match.when("http", () => Either.right<RuntimeMode>("http")),
+          Match.when("stdio", () => Either.right<RuntimeMode>("stdio")),
+          Match.orElse((invalid) =>
+            Either.left(
+              new Error(`Unsupported MODE value "${invalid}" provided.`),
+            ),
+          ),
+        ),
     }),
   );
 
@@ -144,25 +144,42 @@ const shouldEnableStdio = Effect.gen(function* (_) {
     }),
   );
 
-  return mode === "both" || mode === "stdio";
+  return pipe(
+    Match.value(mode),
+    Match.when("both", () => true),
+    Match.when("stdio", () => true),
+    Match.orElse(() => false),
+  );
 });
 
 const program = Effect.gen(function* (_) {
   const config = yield* _(getConfig);
   const server = yield* _(createMcpServer);
 
-  if (yield* _(shouldEnableStdio)) {
-    yield* _(connectStdioTransport(server));
-  }
+  const enableStdio = yield* _(shouldEnableStdio);
 
-  if (config.enableHttpServer) {
-    const port = yield* _(determinePort);
-    yield* _(startHttpServer(server, port, config));
-  } else {
-    yield* _(
-      Effect.logInfo("ℹ️ HTTP server disabled, running in STDIO mode only"),
-    );
-  }
+  yield* _(
+    pipe(
+      Match.value(enableStdio),
+      Match.when(true, () => connectStdioTransport(server)),
+      Match.orElse(() => Effect.succeed(undefined)),
+    ),
+  );
+
+  yield* _(
+    pipe(
+      Match.value(config.enableHttpServer),
+      Match.when(true, () =>
+        Effect.gen(function* (_) {
+          const port = yield* _(determinePort);
+          yield* _(startHttpServer(server, port, config));
+        }),
+      ),
+      Match.orElse(() =>
+        Effect.logInfo("ℹ️ HTTP server disabled, running in STDIO mode only"),
+      ),
+    ),
+  );
 });
 
 const main = program.pipe(

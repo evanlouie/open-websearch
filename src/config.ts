@@ -1,4 +1,13 @@
-import { Context, Effect, Either, Layer, Option, Schema, pipe } from "effect";
+import {
+  Context,
+  Effect,
+  Either,
+  Layer,
+  Option,
+  Schema,
+  pipe,
+  Match,
+} from "effect";
 import * as Arr from "effect/Array";
 
 export const supportedSearchEngines = ["bing", "duckduckgo", "brave"] as const;
@@ -63,17 +72,19 @@ const parseServerMode = (
     raw,
     Option.map((mode) => mode.trim().toLowerCase()),
     Option.match({
-      onNone: () =>
-        Either.right<ServerMode>("both") as Either.Either<ServerMode, Error>,
+      onNone: () => Either.right<ServerMode>("both"),
       onSome: (mode) =>
-        serverModes.includes(mode as ServerMode)
-          ? (Either.right<ServerMode>(mode as ServerMode) as Either.Either<
-              ServerMode,
-              Error
-            >)
-          : (Either.left(
-              new Error(`Unsupported MODE value "${mode}" provided.`),
-            ) as Either.Either<ServerMode, Error>),
+        pipe(
+          Match.value(mode),
+          Match.when("both", () => Either.right<ServerMode>("both")),
+          Match.when("http", () => Either.right<ServerMode>("http")),
+          Match.when("stdio", () => Either.right<ServerMode>("stdio")),
+          Match.orElse((invalid) =>
+            Either.left(
+              new Error(`Unsupported MODE value "${invalid}" provided.`),
+            ),
+          ),
+        ),
     }),
   );
 
@@ -85,17 +96,18 @@ const parseBooleanEnv = (
     raw,
     Option.map((value) => value.trim().toLowerCase()),
     Option.match({
-      onNone: () => Either.right(defaultValue) as Either.Either<boolean, Error>,
+      onNone: () => Either.right(defaultValue),
       onSome: (value) => {
-        if (value === "true") {
-          return Either.right(true) as Either.Either<boolean, Error>;
-        }
-        if (value === "false") {
-          return Either.right(false) as Either.Either<boolean, Error>;
-        }
-        return Either.left(
-          new Error(`Unsupported boolean value "${value}" provided.`),
-        ) as Either.Either<boolean, Error>;
+        return pipe(
+          Match.value(value),
+          Match.when("true", () => Either.right(true)),
+          Match.when("false", () => Either.right(false)),
+          Match.orElse(() => {
+            return Either.left(
+              new Error(`Unsupported boolean value "${value}" provided.`),
+            );
+          }),
+        );
       },
     }),
   );
@@ -132,50 +144,71 @@ const buildConfigEffect = Effect.gen(function* (_) {
   );
   const filteredAllowed = Arr.filter(rawAllowed, isSupportedEngine);
 
-  if (rawAllowed.length > 0 && filteredAllowed.length === 0) {
-    yield* _(
-      Effect.logWarning(
-        "Invalid ALLOWED_SEARCH_ENGINES specified. All values ignored; all engines enabled.",
-      ).pipe(Effect.annotateLogs({ rawAllowed: rawAllowed.join(", ") })),
-    );
-  } else if (filteredAllowed.length !== rawAllowed.length) {
-    const invalid = Arr.filter(
-      rawAllowed,
-      (engine) => !isSupportedEngine(engine),
-    );
-    yield* _(
-      Effect.logWarning("Invalid search engines detected and ignored.").pipe(
-        Effect.annotateLogs({ invalid: invalid.join(", ") }),
+  yield* _(
+    pipe(
+      Match.value({ rawAllowed, filteredAllowed }),
+      Match.when(
+        ({ rawAllowed, filteredAllowed }) =>
+          rawAllowed.length > 0 && filteredAllowed.length === 0,
+        ({ rawAllowed }) =>
+          Effect.logWarning(
+            "Invalid ALLOWED_SEARCH_ENGINES specified. All values ignored; all engines enabled.",
+          ).pipe(Effect.annotateLogs({ rawAllowed: rawAllowed.join(", ") })),
       ),
-    );
-  }
-
-  const allowedSearchEngines: SupportedEngine[] = Arr.isNonEmptyReadonlyArray(
-    filteredAllowed,
-  )
-    ? filteredAllowed
-    : [];
-
-  if (
-    Arr.isNonEmptyReadonlyArray(allowedSearchEngines) &&
-    !pipe(
-      allowedSearchEngines,
-      Arr.some((engine) => engine === defaultSearchEngine),
-    )
-  ) {
-    const updatedDefault = allowedSearchEngines[0]!;
-    yield* _(
-      Effect.logWarning(
-        "Default search engine is not included in allowed list. Switching to first allowed engine.",
-      ).pipe(
-        Effect.annotateLogs({
-          previousDefault: defaultSearchEngine,
-          newDefault: updatedDefault,
-        }),
+      Match.when(
+        ({ rawAllowed, filteredAllowed }) =>
+          filteredAllowed.length !== rawAllowed.length,
+        ({ rawAllowed }) => {
+          const invalid = Arr.filter(
+            rawAllowed,
+            (engine) => !isSupportedEngine(engine),
+          );
+          return Effect.logWarning(
+            "Invalid search engines detected and ignored.",
+          ).pipe(Effect.annotateLogs({ invalid: invalid.join(", ") }));
+        },
       ),
-    );
-    defaultSearchEngine = updatedDefault;
-  }
+      Match.orElse(() => Effect.succeed(undefined)),
+    ),
+  );
+
+  const filteredSupported = filteredAllowed as ReadonlyArray<SupportedEngine>;
+
+  const allowedSearchEngines: SupportedEngine[] = pipe(
+    Match.value(Arr.isNonEmptyReadonlyArray(filteredSupported)),
+    Match.when(true, () => [...filteredSupported]),
+    Match.orElse(() => [] as SupportedEngine[]),
+  );
+
+  yield* _(
+    pipe(
+      Match.value({ allowedSearchEngines, defaultSearchEngine }),
+      Match.when(
+        ({ allowedSearchEngines, defaultSearchEngine }) =>
+          Arr.isNonEmptyReadonlyArray(allowedSearchEngines) &&
+          !pipe(
+            allowedSearchEngines,
+            Arr.some((engine) => engine === defaultSearchEngine),
+          ),
+        ({ allowedSearchEngines, defaultSearchEngine }) => {
+          const updatedDefault = allowedSearchEngines[0]!;
+          return Effect.logWarning(
+            "Default search engine is not included in allowed list. Switching to first allowed engine.",
+          ).pipe(
+            Effect.annotateLogs({
+              previousDefault: defaultSearchEngine,
+              newDefault: updatedDefault,
+            }),
+            Effect.map(() => {
+              defaultSearchEngine = updatedDefault;
+              return undefined;
+            }),
+          );
+        },
+      ),
+      Match.orElse(() => Effect.succeed(undefined)),
+    ),
+  );
 
   const useProxy = yield* _(
     resolveBooleanEnv(
@@ -246,31 +279,39 @@ const buildConfigEffect = Effect.gen(function* (_) {
     ),
   );
 
-  if (config.allowedSearchEngines.length > 0) {
-    yield* _(
-      Effect.logInfo("🔍 Restricting search engines.").pipe(
-        Effect.annotateLogs({
-          allowedSearchEngines: config.allowedSearchEngines.join(", "),
-        }),
+  yield* _(
+    pipe(
+      Match.value(config.allowedSearchEngines),
+      Match.when(
+        (engines) => engines.length > 0,
+        (engines) =>
+          Effect.logInfo("🔍 Restricting search engines.").pipe(
+            Effect.annotateLogs({
+              allowedSearchEngines: engines.join(", "),
+            }),
+          ),
       ),
-    );
-  } else {
-    yield* _(Effect.logInfo("🔍 No search engine restrictions configured."));
-  }
+      Match.orElse(() =>
+        Effect.logInfo("🔍 No search engine restrictions configured."),
+      ),
+    ),
+  );
 
-  if (config.useProxy) {
-    yield* _(
-      Effect.logInfo("🌐 Proxy enabled.").pipe(
-        Effect.annotateLogs({
-          proxyUrl: Option.getOrElse(config.proxyUrl, () => ""),
-        }),
+  yield* _(
+    pipe(
+      Match.value(config.useProxy),
+      Match.when(true, () =>
+        Effect.logInfo("🌐 Proxy enabled.").pipe(
+          Effect.annotateLogs({
+            proxyUrl: Option.getOrElse(config.proxyUrl, () => ""),
+          }),
+        ),
       ),
-    );
-  } else {
-    yield* _(
-      Effect.logInfo("🌐 Proxy disabled. Set USE_PROXY=true to enable."),
-    );
-  }
+      Match.orElse(() =>
+        Effect.logInfo("🌐 Proxy disabled. Set USE_PROXY=true to enable."),
+      ),
+    ),
+  );
 
   yield* _(
     Effect.logInfo("🖥️ Server mode configured.").pipe(
@@ -278,19 +319,29 @@ const buildConfigEffect = Effect.gen(function* (_) {
     ),
   );
 
-  if (config.enableHttpServer) {
-    if (config.enableCors) {
-      yield* _(
-        Effect.logInfo("🔒 CORS enabled.").pipe(
-          Effect.annotateLogs({ corsOrigin: config.corsOrigin }),
-        ),
-      );
-    } else {
-      yield* _(
-        Effect.logInfo("🔒 CORS disabled. Set ENABLE_CORS=true to enable."),
-      );
-    }
-  }
+  yield* _(
+    pipe(
+      Match.value(config),
+      Match.when(
+        ({ enableHttpServer }) => enableHttpServer,
+        (cfg) =>
+          pipe(
+            Match.value(cfg.enableCors),
+            Match.when(true, () =>
+              Effect.logInfo("🔒 CORS enabled.").pipe(
+                Effect.annotateLogs({ corsOrigin: cfg.corsOrigin }),
+              ),
+            ),
+            Match.orElse(() =>
+              Effect.logInfo(
+                "🔒 CORS disabled. Set ENABLE_CORS=true to enable.",
+              ),
+            ),
+          ),
+      ),
+      Match.orElse(() => Effect.succeed(undefined)),
+    ),
+  );
 
   return config;
 });

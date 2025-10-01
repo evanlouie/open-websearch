@@ -215,6 +215,12 @@ The project MUST maintain:
 - ✅ All integration tests passing (22+ tests covering HTTP endpoints, CORS, sessions, errors, multi-query)
 - ✅ README.md kept up-to-date with all features and usage examples
 
+### Code Style Notes
+
+- Favor pattern matching instead of `if/else` for business logic branches. Build matchers with `pipe(Match.value(...), Match.when(...), Match.orElse(...))` so every case flows through the same pipeline.
+- Nest matches sparingly; when stepping into a nested match, open a fresh `pipe` scoped to the new value (for example `pipe(Match.value(cfg.enableCors), ...)`).
+- When a match handler performs updates, return explicitly from the handler and keep mutable writes localized.
+
 **Type Safety Guidelines:**
 
 - Use `AxiosRequestConfig` for axios request options instead of `any`
