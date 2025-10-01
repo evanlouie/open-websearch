@@ -19,7 +19,7 @@ A Model Context Protocol (MCP) server based on multi-engine search results, supp
 ## Features
 
 - Web search using multi-engine results
-  - bing
+  - bing ⚠️ _Currently experiencing issues and may not return results_
   - duckduckgo
   - brave
 - **Multi-query search support** - search multiple queries in a single request (up to 10 queries)
@@ -68,7 +68,7 @@ DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx github:evanlouie/open-web
 | ------------------------ | ----------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `ENABLE_CORS`            | `false`                 | `true`, `false`               | Enable CORS                                                                                                                     |
 | `CORS_ORIGIN`            | `*`                     | Any valid origin              | CORS origin configuration                                                                                                       |
-| `DEFAULT_SEARCH_ENGINE`  | `bing`                  | `bing`, `duckduckgo`, `brave` | Default search engine                                                                                                           |
+| `DEFAULT_SEARCH_ENGINE`  | `brave`                 | `bing`, `duckduckgo`, `brave` | Default search engine (Note: Bing currently has issues)                                                                         |
 | `USE_PROXY`              | `false`                 | `true`, `false`               | Enable HTTP proxy                                                                                                               |
 | `PROXY_URL`              | `http://127.0.0.1:7890` | Any valid URL                 | Proxy server URL                                                                                                                |
 | `MODE`                   | `both`                  | `both`, `http`, `stdio`       | Server mode: both HTTP+STDIO, HTTP only, or STDIO only                                                                          |
@@ -223,14 +223,14 @@ docker-compose up -d
 
 Environment variable configuration:
 
-| Variable                | Default                 | Options                       | Description                                         |
-| ----------------------- | ----------------------- | ----------------------------- | --------------------------------------------------- |
-| `ENABLE_CORS`           | `false`                 | `true`, `false`               | Enable CORS                                         |
-| `CORS_ORIGIN`           | `*`                     | Any valid origin              | CORS origin configuration                           |
-| `DEFAULT_SEARCH_ENGINE` | `bing`                  | `bing`, `duckduckgo`, `brave` | Default search engine                               |
-| `USE_PROXY`             | `false`                 | `true`, `false`               | Enable HTTP proxy                                   |
-| `PROXY_URL`             | `http://127.0.0.1:7890` | Any valid URL                 | Proxy server URL                                    |
-| `PORT`                  | `3000`                  | 0-65535                       | Server port (set to 0 for automatic port selection) |
+| Variable                | Default                 | Options                       | Description                                             |
+| ----------------------- | ----------------------- | ----------------------------- | ------------------------------------------------------- |
+| `ENABLE_CORS`           | `false`                 | `true`, `false`               | Enable CORS                                             |
+| `CORS_ORIGIN`           | `*`                     | Any valid origin              | CORS origin configuration                               |
+| `DEFAULT_SEARCH_ENGINE` | `brave`                 | `bing`, `duckduckgo`, `brave` | Default search engine (Note: Bing currently has issues) |
+| `USE_PROXY`             | `false`                 | `true`, `false`               | Enable HTTP proxy                                       |
+| `PROXY_URL`             | `http://127.0.0.1:7890` | Any valid URL                 | Proxy server URL                                        |
+| `PORT`                  | `3000`                  | 0-65535                       | Server port (set to 0 for automatic port selection)     |
 
 Then configure in your MCP client:
 
@@ -296,6 +296,7 @@ The tool returns an MCP response with two content items:
    ```
 
 2. **JSON resource** (structured data with `mimeType: "application/json"`):
+
    ```json
    {
      "query": "typescript programming",
@@ -343,6 +344,7 @@ The tool returns an MCP response with two content items:
    ```
 
 2. **JSON resource** (structured data with `mimeType: "application/json"`):
+
    ```json
    {
      "results": [
@@ -431,7 +433,8 @@ Since this tool works by scraping multi-engine search results, please note the f
 
 4. **Search Engine Configuration**:
    - Default search engine can be set via the `DEFAULT_SEARCH_ENGINE` environment variable
-   - Supported engines: bing, duckduckgo, brave
+   - Supported engines: bing (currently has issues), duckduckgo, brave
+   - The default engine is brave
    - The default engine is used when searching specific websites
 
 5. **Proxy Configuration**:

@@ -171,13 +171,22 @@ export const setupTools = (server: McpServer): void => {
   // Search tool
   // Generate dynamic description for search tool
   const getSearchDescription = () => {
+    const bingWarning =
+      "⚠️ WARNING: Bing is currently experiencing issues and may not return results. Recommended engines: Brave or DuckDuckGo. ";
     if (config.allowedSearchEngines.length === 0) {
-      return "Search the web using Bing, Brave, or DuckDuckGo. Supports single or multiple queries (max 10). No API key required.";
+      return (
+        bingWarning +
+        "Search the web using Bing, Brave, or DuckDuckGo. Supports single or multiple queries (max 10). No API key required."
+      );
     } else {
       const enginesText = config.allowedSearchEngines
         .map((e) => e.charAt(0).toUpperCase() + e.slice(1))
         .join(", ");
-      return `Search the web using these engines: ${enginesText}. Supports single or multiple queries (max 10). No API key required.`;
+      const hasBing = config.allowedSearchEngines.includes("bing");
+      return (
+        (hasBing ? bingWarning : "") +
+        `Search the web using these engines: ${enginesText}. Supports single or multiple queries (max 10). No API key required.`
+      );
     }
   };
 

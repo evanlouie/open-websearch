@@ -17,8 +17,8 @@ startCommand:
         description: CORS origin
       defaultSearchEngine:
         type: string
-        default: duckduckgo
-        description: Default search engine (bing, duckduckgo, brave)
+        default: brave
+        description: "Default search engine (bing, duckduckgo, brave) - Note: Bing currently has issues"
       useProxy:
         type: boolean
         default: false
@@ -30,6 +30,6 @@ startCommand:
   exampleConfig:
     enableCors: false
     corsOrigin: "*"
-    defaultSearchEngine: duckduckgo
+    defaultSearchEngine: brave
     useProxy: true
     proxyUrl: http://your-proxy-server:port

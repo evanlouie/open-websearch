@@ -19,7 +19,7 @@ export const config: AppConfig = {
   // Search engine configuration
   defaultSearchEngine:
     (process.env.DEFAULT_SEARCH_ENGINE as AppConfig["defaultSearchEngine"]) ||
-    "bing",
+    "brave",
   // Parse comma-separated list of allowed search engines
   allowedSearchEngines: process.env.ALLOWED_SEARCH_ENGINES
     ? process.env.ALLOWED_SEARCH_ENGINES.split(",").map((e) => e.trim())
@@ -43,9 +43,9 @@ const validSearchEngines = ["bing", "duckduckgo", "brave"];
 // Validate default search engine
 if (!validSearchEngines.includes(config.defaultSearchEngine)) {
   console.error(
-    `Invalid DEFAULT_SEARCH_ENGINE: "${config.defaultSearchEngine}", falling back to "bing"`,
+    `Invalid DEFAULT_SEARCH_ENGINE: "${config.defaultSearchEngine}", falling back to "brave"`,
   );
-  config.defaultSearchEngine = "bing";
+  config.defaultSearchEngine = "brave";
 }
 
 // Validate allowed search engines
