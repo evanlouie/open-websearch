@@ -88,20 +88,24 @@ const executeMultiQuerySearch = async (
     results: SearchResult[];
   }>
 > => {
+  // Deduplicate queries after trimming to avoid redundant searches
+  const cleanedQueries = queries.map((q) => q.trim());
+  const uniqueQueries = [...new Set(cleanedQueries)];
+
   console.error(
-    `[DEBUG] Executing multi-query search, queries: [${queries.map((q) => `"${q}"`).join(", ")}], engines: ${engines.join(", ")}, limit: ${limit}`,
+    `[DEBUG] Executing multi-query search, original queries: [${queries.map((q) => `"${q}"`).join(", ")}], unique queries after deduplication: [${uniqueQueries.map((q) => `"${q}"`).join(", ")}], engines: ${engines.join(", ")}, limit: ${limit}`,
   );
 
   const limits = distributeLimit(limit, engines.length);
 
-  // For each engine, process all queries sequentially
+  // For each engine, process all unique queries sequentially
   const engineTasks = engines.map(async (engine, engineIndex) => {
     const engineLimit = limits[engineIndex];
     const searchFn = engineMap[engine as SupportedEngine];
 
     if (!searchFn) {
       console.error(`Unsupported search engine: ${engine}`);
-      return queries.map((q) => ({
+      return uniqueQueries.map((q) => ({
         query: q,
         engine,
         results: [] as SearchResult[],
@@ -114,24 +118,23 @@ const executeMultiQuerySearch = async (
       results: SearchResult[];
     }> = [];
 
-    // Process queries sequentially for this engine
-    for (const query of queries) {
-      const cleanQuery = query.trim();
-      if (!cleanQuery) {
-        console.error(`Query string is empty for query: "${query}"`);
+    // Process unique queries sequentially for this engine
+    for (const query of uniqueQueries) {
+      if (!query) {
+        console.error(`Query string is empty after trimming`);
         engineResults.push({ query, engine, results: [] });
         continue;
       }
 
       try {
-        const results = await searchFn(cleanQuery, engineLimit);
-        engineResults.push({ query: cleanQuery, engine, results });
+        const results = await searchFn(query, engineLimit);
+        engineResults.push({ query, engine, results });
       } catch (error) {
         console.error(
-          `Search failed for engine ${engine}, query "${cleanQuery}":`,
+          `Search failed for engine ${engine}, query "${query}":`,
           error,
         );
-        engineResults.push({ query: cleanQuery, engine, results: [] });
+        engineResults.push({ query, engine, results: [] });
       }
     }
 
@@ -141,15 +144,14 @@ const executeMultiQuerySearch = async (
   // Run all engine tasks in parallel
   const allEngineResults = await Promise.all(engineTasks);
 
-  // Aggregate results by query
-  return queries.map((query) => {
-    const cleanQuery = query.trim();
+  // Map results back to original query positions (preserving order and duplicates)
+  return cleanedQueries.map((originalQuery) => {
     const queryResults: SearchResult[] = [];
 
     // Collect results from all engines for this query
     for (const engineResults of allEngineResults) {
       const engineQueryResult = engineResults.find(
-        (r) => r.query === cleanQuery,
+        (r) => r.query === originalQuery,
       );
       if (engineQueryResult) {
         queryResults.push(...engineQueryResult.results);
@@ -157,7 +159,7 @@ const executeMultiQuerySearch = async (
     }
 
     return {
-      query: cleanQuery,
+      query: originalQuery,
       engines,
       totalResults: queryResults.length,
       results: queryResults.slice(0, limit),

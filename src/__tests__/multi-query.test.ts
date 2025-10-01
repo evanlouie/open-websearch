@@ -108,4 +108,40 @@ describe("Multi-Query Search Tests", () => {
       expect(Array.isArray(result.results)).toBe(true);
     });
   });
+
+  test("Duplicate query deduplication works correctly", () => {
+    // Test that duplicate queries are deduplicated
+    const queries = ["typescript", "typescript", "javascript"];
+    const cleanedQueries = queries.map((q) => q.trim());
+    const uniqueQueries = [...new Set(cleanedQueries)];
+
+    expect(uniqueQueries.length).toBe(2);
+    expect(uniqueQueries).toEqual(["typescript", "javascript"]);
+
+    // Test that results map back to original positions
+    const resultMapping = cleanedQueries.map((query) => {
+      return { query, wasFound: uniqueQueries.includes(query) };
+    });
+
+    expect(resultMapping.length).toBe(3);
+    expect(resultMapping[0].query).toBe("typescript");
+    expect(resultMapping[1].query).toBe("typescript");
+    expect(resultMapping[2].query).toBe("javascript");
+    resultMapping.forEach((result) => {
+      expect(result.wasFound).toBe(true);
+    });
+  });
+
+  test("Duplicate queries with whitespace are deduplicated", () => {
+    // Test that queries with different whitespace are treated as duplicates after trimming
+    const queries = ["typescript", "  typescript  ", " typescript"];
+    const cleanedQueries = queries.map((q) => q.trim());
+    const uniqueQueries = [...new Set(cleanedQueries)];
+
+    expect(uniqueQueries.length).toBe(1);
+    expect(uniqueQueries).toEqual(["typescript"]);
+
+    // Verify all original positions map to the same cleaned query
+    expect(cleanedQueries).toEqual(["typescript", "typescript", "typescript"]);
+  });
 });
