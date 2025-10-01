@@ -205,18 +205,32 @@ export const setupTools = (server: McpServer): void => {
     "search",
     getSearchDescription(),
     {
-      query: z.union([
-        z.string().min(1, "Search query must not be empty"),
-        z
-          .array(z.string().min(1))
-          .min(1, "At least one query is required")
-          .max(10, "Maximum 10 queries allowed"),
-      ]),
-      limit: z.number().min(1).max(50).default(10),
+      query: z
+        .union([
+          z.string().min(1, "Search query must not be empty"),
+          z
+            .array(z.string().min(1))
+            .min(1, "At least one query is required")
+            .max(10, "Maximum 10 queries allowed"),
+        ])
+        .describe(
+          'Search query as a string (e.g., "latest AI news") or array of strings for multi-query search (e.g., ["AI news", "machine learning trends"])',
+        ),
+      limit: z
+        .number()
+        .min(1)
+        .max(50)
+        .default(10)
+        .describe(
+          "Maximum number of results to return per query (default: 10)",
+        ),
       engines: z
         .array(getEnginesEnum())
         .min(1)
         .default([config.defaultSearchEngine])
+        .describe(
+          `Search engines to use (default: [${config.defaultSearchEngine}])`,
+        )
         .transform((requestedEngines) => {
           // If allowed search engines are configured, filter requested engines
           if (config.allowedSearchEngines.length > 0) {
