@@ -1,8 +1,8 @@
 import axios, { AxiosRequestConfig } from "axios";
 import * as cheerio from "cheerio";
 import { HttpsProxyAgent } from "https-proxy-agent";
-import { SearchResult } from "../../types.js";
-import { getProxyUrl } from "../../config.js";
+import { SearchResult } from "../types.js";
+import { getProxyUrl } from "../config.js";
 
 interface DuckDuckGoSearchItem {
   t?: string; // title

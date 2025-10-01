@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createMcpServer, createHttpServer } from "../server.js";
+import { createMcpServer, createHttpServer } from "./server.js";
 import type { Server } from "node:http";
 
 describe("HTTP Server Integration Tests", () => {

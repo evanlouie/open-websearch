@@ -1,7 +1,7 @@
 import axios, { AxiosRequestConfig } from "axios";
 import * as cheerio from "cheerio";
-import { SearchResult } from "../../types.js";
-import { getProxyUrl } from "../../config.js";
+import { SearchResult } from "../types.js";
+import { getProxyUrl } from "../config.js";
 import { HttpsProxyAgent } from "https-proxy-agent";
 
 export async function searchBrave(

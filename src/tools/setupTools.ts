@@ -1,11 +1,11 @@
 // tools/setupTools.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { searchBing } from "../engines/bing/bing.js";
+import { searchBing } from "../engines/bing.js";
 import { SearchResult } from "../types.js";
 import { z } from "zod";
-import { searchDuckDuckGo } from "../engines/duckduckgo/index.js";
+import { searchDuckDuckGo } from "../engines/duckduckgo.js";
 import { config } from "../config.js";
-import { searchBrave } from "../engines/brave/index.js";
+import { searchBrave } from "../engines/brave.js";
 
 // Supported search engines
 const SUPPORTED_ENGINES = ["bing", "duckduckgo", "brave"] as const;

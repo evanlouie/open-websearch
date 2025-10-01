@@ -1,4 +1,4 @@
-# CLAUDE.md
+# Developer Instructions
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Open-WebSearch is a Model Context Protocol (MCP) server that provides multi-engine web search capabilities without requiring API keys. It scrapes search results from various engines (Bing, DuckDuckGo, Brave).
 
-**Repository:** https://github.com/Aas-ee/open-webSearch
+**Repository:** https://github.com/evanlouie/open-websearch
 
 ## Common Development Commands
 
@@ -56,7 +56,6 @@ bunx open-websearch@latest
 # With environment variables
 DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx open-websearch@latest
 ```
-
 
 ## Architecture
 
