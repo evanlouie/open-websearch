@@ -106,11 +106,9 @@ export const searchBrave = (
 
       if (pageResults.length === 0) {
         yield* _(
-          Effect.sync(() => {
-            console.error(
-              "⚠️ Brave returned no additional results, ending early.",
-            );
-          }),
+          Effect.logWarning(
+            "⚠️ Brave returned no additional Brave results, ending early.",
+          ).pipe(Effect.annotateLogs({ engine: "brave", query })),
         );
         break;
       }

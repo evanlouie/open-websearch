@@ -54,23 +54,18 @@ const buildConfigEffect = Effect.gen(function* (_) {
 
   if (rawAllowed.length > 0 && filteredAllowed.length === 0) {
     yield* _(
-      Effect.sync(() => {
-        console.error(
-          `Invalid ALLOWED_SEARCH_ENGINES specified: ${rawAllowed.join(", ")}. All values ignored; all engines enabled.
-`,
-        );
-      }),
+      Effect.logWarning(
+        "Invalid ALLOWED_SEARCH_ENGINES specified. All values ignored; all engines enabled.",
+      ).pipe(Effect.annotateLogs({ rawAllowed: rawAllowed.join(", ") })),
     );
   } else if (filteredAllowed.length !== rawAllowed.length) {
     const invalid = rawAllowed.filter(
       (engine) => !supportedSearchEngines.includes(engine as SupportedEngine),
     );
     yield* _(
-      Effect.sync(() => {
-        console.error(
-          `Invalid search engines detected and ignored: ${invalid.join(", ")}`,
-        );
-      }),
+      Effect.logWarning("Invalid search engines detected and ignored.").pipe(
+        Effect.annotateLogs({ invalid: invalid.join(", ") }),
+      ),
     );
   }
 
@@ -83,11 +78,14 @@ const buildConfigEffect = Effect.gen(function* (_) {
   ) {
     const updatedDefault = allowedSearchEngines[0];
     yield* _(
-      Effect.sync(() => {
-        console.error(
-          `Default search engine "${defaultSearchEngine}" is not allowed. Using "${updatedDefault}" instead.`,
-        );
-      }),
+      Effect.logWarning(
+        "Default search engine is not included in allowed list. Switching to first allowed engine.",
+      ).pipe(
+        Effect.annotateLogs({
+          previousDefault: defaultSearchEngine,
+          newDefault: updatedDefault,
+        }),
+      ),
     );
     defaultSearchEngine = updatedDefault;
   }
@@ -114,62 +112,52 @@ const buildConfigEffect = Effect.gen(function* (_) {
   const config = pipe(baseConfig, Schema.decodeUnknownSync(AppConfigSchema));
 
   yield* _(
-    Effect.sync(() => {
-      console.error(`🔍 Default search engine: ${config.defaultSearchEngine}`);
-    }),
+    Effect.logInfo("🔍 Default search engine set.").pipe(
+      Effect.annotateLogs({ defaultSearchEngine: config.defaultSearchEngine }),
+    ),
   );
 
   if (config.allowedSearchEngines.length > 0) {
     yield* _(
-      Effect.sync(() => {
-        console.error(
-          `🔍 Allowed search engines: ${config.allowedSearchEngines.join(", ")}`,
-        );
-      }),
+      Effect.logInfo("🔍 Restricting search engines.").pipe(
+        Effect.annotateLogs({
+          allowedSearchEngines: config.allowedSearchEngines.join(", "),
+        }),
+      ),
     );
   } else {
-    yield* _(
-      Effect.sync(() => {
-        console.error(
-          `🔍 No search engine restrictions, all engines can be used`,
-        );
-      }),
-    );
+    yield* _(Effect.logInfo("🔍 No search engine restrictions configured."));
   }
 
   if (config.useProxy) {
     yield* _(
-      Effect.sync(() => {
-        console.error(`🌐 Using proxy: ${config.proxyUrl}`);
-      }),
+      Effect.logInfo("🌐 Proxy enabled.").pipe(
+        Effect.annotateLogs({ proxyUrl: config.proxyUrl ?? "" }),
+      ),
     );
   } else {
     yield* _(
-      Effect.sync(() => {
-        console.error(`🌐 No proxy configured (set USE_PROXY=true to enable)`);
-      }),
+      Effect.logInfo("🌐 Proxy disabled. Set USE_PROXY=true to enable."),
     );
   }
 
   const mode = env.MODE ?? (config.enableHttpServer ? "both" : "stdio");
   yield* _(
-    Effect.sync(() => {
-      console.error(`🖥️ Server mode: ${mode.toUpperCase()}`);
-    }),
+    Effect.logInfo("🖥️ Server mode configured.").pipe(
+      Effect.annotateLogs({ mode: mode.toUpperCase() }),
+    ),
   );
 
   if (config.enableHttpServer) {
     if (config.enableCors) {
       yield* _(
-        Effect.sync(() => {
-          console.error(`🔒 CORS enabled with origin: ${config.corsOrigin}`);
-        }),
+        Effect.logInfo("🔒 CORS enabled.").pipe(
+          Effect.annotateLogs({ corsOrigin: config.corsOrigin }),
+        ),
       );
     } else {
       yield* _(
-        Effect.sync(() => {
-          console.error(`🔒 CORS disabled (set ENABLE_CORS=true to enable)`);
-        }),
+        Effect.logInfo("🔒 CORS disabled. Set ENABLE_CORS=true to enable."),
       );
     }
   }

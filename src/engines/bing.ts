@@ -78,8 +78,7 @@ export const searchBing = (
   limit: number,
 ): Effect.Effect<SearchResult[], SearchEngineError, AppConfig> =>
   Effect.gen(function* (_) {
-    const config = yield* _(getConfig);
-    void config;
+    yield* _(getConfig);
 
     let allResults: SearchResult[] = [];
     let page = 0;
@@ -94,11 +93,9 @@ export const searchBing = (
 
       if (pageResults.length === 0) {
         yield* _(
-          Effect.sync(() => {
-            console.error(
-              "⚠️ Bing returned no additional results, ending early.",
-            );
-          }),
+          Effect.logWarning(
+            "⚠️ Bing returned no additional Bing results, ending early.",
+          ).pipe(Effect.annotateLogs({ engine: "bing", query })),
         );
         break;
       }

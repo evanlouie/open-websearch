@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -368,14 +368,26 @@ export const createHttpServer = (
     };
 
     return createServer((req, res) => {
-      Effect.runPromise(
-        handleHttpRequest(server, transports, resolvedOptions, req, res),
-      ).catch((error) => {
-        console.error("Error handling request:", error);
-        if (!res.headersSent) {
-          res.writeHead(500);
-          res.end("Internal Server Error");
-        }
-      });
+      Effect.runFork(
+        handleHttpRequest(server, transports, resolvedOptions, req, res).pipe(
+          Effect.catchAllCause((cause) =>
+            Effect.logError("Error handling request").pipe(
+              Effect.annotateLogs({
+                cause: Cause.pretty(cause),
+                method: req.method ?? "GET",
+                path: req.url ?? "/",
+              }),
+              Effect.flatMap(() =>
+                Effect.sync(() => {
+                  if (!res.headersSent) {
+                    res.writeHead(500);
+                    res.end("Internal Server Error");
+                  }
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
     });
   });

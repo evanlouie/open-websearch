@@ -12,6 +12,7 @@ import {
   supportedSearchEngines,
   type SupportedEngine,
 } from "../config.js";
+import { StderrLoggerLayer } from "../logging.js";
 
 const SUPPORTED_ENGINES = supportedSearchEngines;
 
@@ -62,15 +63,14 @@ const executeMultiQuerySearch = (
     const limits = distributeLimit(limit, engines.length);
 
     yield* _(
-      Effect.sync(() => {
-        console.error(
-          `[DEBUG] Executing multi-query search, original queries: [${queries
-            .map((q) => `"${q}"`)
-            .join(", ")}], unique queries after deduplication: [${uniqueQueries
-            .map((q) => `"${q}"`)
-            .join(", ")}], engines: ${engines.join(", ")}, limit: ${limit}`,
-        );
-      }),
+      Effect.logDebug("Executing multi-query search.").pipe(
+        Effect.annotateLogs({
+          originalQueries: queries,
+          uniqueQueries,
+          engines,
+          limit,
+        }),
+      ),
     );
 
     const engineEffects = engines.map((engine, engineIndex) => {
@@ -88,6 +88,7 @@ const executeMultiQuerySearch = (
 
         const effect = searchFn(query, engineLimit).pipe(
           Effect.provideService(AppConfigTag, config),
+          Effect.provide(StderrLoggerLayer),
           Effect.map(
             (results): EngineQueryResult => ({
               query,
@@ -96,12 +97,17 @@ const executeMultiQuerySearch = (
             }),
           ),
           Effect.tapError((error) =>
-            Effect.sync(() => {
-              console.error(
-                `Search failed for engine ${engine}, query "${query}":`,
-                error,
-              );
-            }),
+            Effect.logError("Search failed.").pipe(
+              Effect.annotateLogs({
+                engine,
+                query,
+                error: error instanceof Error ? error.message : String(error),
+                stack:
+                  error instanceof Error && error.stack
+                    ? error.stack
+                    : undefined,
+              }),
+            ),
           ),
           Effect.orElseSucceed(() => ({
             query,
@@ -251,7 +257,7 @@ export const setupTools = (server: McpServer) =>
               effectiveEngines,
               limit,
               config,
-            );
+            ).pipe(Effect.provide(StderrLoggerLayer));
 
             try {
               const results = await Effect.runPromise(effect);
@@ -268,7 +274,18 @@ export const setupTools = (server: McpServer) =>
             } catch (error) {
               const message =
                 error instanceof Error ? error.message : "Unknown error";
-              console.error("Search tool execution failed:", error);
+              await Effect.runPromise(
+                Effect.logError("Search tool execution failed.").pipe(
+                  Effect.annotateLogs({
+                    error: message,
+                    stack:
+                      error instanceof Error && error.stack
+                        ? error.stack
+                        : undefined,
+                  }),
+                  Effect.provide(StderrLoggerLayer),
+                ),
+              );
 
               return {
                 content: [

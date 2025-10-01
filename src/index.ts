@@ -2,17 +2,16 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Server } from "node:http";
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 import { AppConfigLayer, getConfig, type AppConfig } from "./config.js";
 import { createHttpServer, createMcpServer } from "./server.js";
+import { StderrLoggerLayer } from "./logging.js";
 
 const connectStdioTransport = (server: McpServer) =>
   Effect.gen(function* (_) {
     const transport = new StdioServerTransport();
 
-    yield* _(
-      Effect.sync(() => console.error("🔌 Starting STDIO transport...")),
-    );
+    yield* _(Effect.logInfo("🔌 Starting STDIO transport..."));
 
     yield* _(
       Effect.tryPromise<void, Error>({
@@ -22,25 +21,34 @@ const connectStdioTransport = (server: McpServer) =>
       }),
     );
 
-    yield* _(Effect.sync(() => console.error("✅ STDIO transport enabled")));
+    yield* _(Effect.logInfo("✅ STDIO transport enabled"));
   });
 
 const listenHttpServer = (server: Server, port: number) =>
-  Effect.tryPromise<void, Error>({
-    try: () =>
-      new Promise((resolve) => {
-        server.listen(port, "0.0.0.0", () => {
-          const address = server.address();
-          const actualPort =
-            typeof address === "object" && address !== null
-              ? address.port
-              : port;
-          console.error(`✅ HTTP server running on port ${actualPort}`);
-          resolve();
-        });
-      }),
-    catch: (cause) =>
-      cause instanceof Error ? cause : new Error(String(cause)),
+  Effect.async<void, Error>((resume) => {
+    const onError = (cause: unknown) => {
+      server.off("listening", onListening);
+      resume(
+        Effect.fail(cause instanceof Error ? cause : new Error(String(cause))),
+      );
+    };
+
+    const onListening = () => {
+      server.off("error", onError);
+      const address = server.address();
+      const actualPort =
+        typeof address === "object" && address !== null ? address.port : port;
+      resume(Effect.logInfo(`✅ HTTP server running on port ${actualPort}`));
+    };
+
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, "0.0.0.0");
+
+    return Effect.sync(() => {
+      server.off("error", onError);
+      server.off("listening", onListening);
+    });
   });
 
 const startHttpServer = (
@@ -49,7 +57,7 @@ const startHttpServer = (
   config: AppConfig,
 ) =>
   Effect.gen(function* (_) {
-    yield* _(Effect.sync(() => console.error("🔌 Starting HTTP server...")));
+    yield* _(Effect.logInfo("🔌 Starting HTTP server..."));
 
     const httpServer = yield* _(
       createHttpServer(mcpServer, {
@@ -83,16 +91,21 @@ const program = Effect.gen(function* (_) {
     yield* _(startHttpServer(server, port, config));
   } else {
     yield* _(
-      Effect.sync(() => {
-        console.error("ℹ️ HTTP server disabled, running in STDIO mode only");
-      }),
+      Effect.logInfo("ℹ️ HTTP server disabled, running in STDIO mode only"),
     );
   }
 });
 
-Effect.runPromise(program.pipe(Effect.provide(AppConfigLayer))).catch(
-  (error) => {
-    console.error("❌ Failed to start server:", error);
-    process.exit(1);
-  },
+const main = program.pipe(
+  Effect.provide(StderrLoggerLayer),
+  Effect.provide(AppConfigLayer),
+  Effect.catchAllCause((cause) =>
+    Effect.logError(`❌ Failed to start server\n${Cause.pretty(cause)}`).pipe(
+      Effect.flatMap(() => Effect.sync(() => process.exit(1))),
+    ),
+  ),
 );
+
+Effect.runPromise(main).catch(() => {
+  process.exit(1);
+});

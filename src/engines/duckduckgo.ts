@@ -6,11 +6,17 @@ import { getProxyUrl, type AppConfig } from "../config.js";
 import { SearchEngineError, type SearchResult } from "../types.js";
 
 interface DuckDuckGoSearchItem {
+  /** Result title. */
   t?: string;
+  /** Result URL. */
   u?: string;
+  /** Description/abstract text. */
   a?: string;
+  /** Icon/image URL. */
   i?: string;
+  /** Source name. */
   sn?: string;
+  /** Navigation item flag. */
   n?: boolean;
 }
 
@@ -263,12 +269,15 @@ export const searchDuckDuckGo = (
               ),
           }),
           (error) =>
-            Effect.sync(() => {
-              console.error(
-                "DuckDuckGo preload URL method failed, falling back to HTML:",
-                error,
-              );
-            }),
+            Effect.logWarning(
+              "DuckDuckGo preload URL method failed, falling back to HTML.",
+            ).pipe(
+              Effect.annotateLogs({
+                engine: "duckduckgo",
+                query,
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            ),
         ),
         () => [],
       ),
