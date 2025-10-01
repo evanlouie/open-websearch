@@ -1,10 +1,10 @@
-import {searchExa} from "../engines/exa/index.js";
+import { searchExa } from "../engines/exa/index.js";
 
 async function testExaSearch() {
-  console.log('🔍 Starting Exa search test...');
+  console.log("🔍 Starting Exa search test...");
 
   try {
-    const query = 'websearchmcp';
+    const query = "websearchmcp";
     const maxResults = 10;
 
     console.log(`📝 Search query: ${query}`);
@@ -22,7 +22,7 @@ async function testExaSearch() {
 
     return results;
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error("❌ Test failed:", error);
     return [];
   }
 }

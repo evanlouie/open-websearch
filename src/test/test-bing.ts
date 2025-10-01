@@ -1,10 +1,10 @@
-import { searchBing } from '../engines/bing/index.js';
+import { searchBing } from "../engines/bing/index.js";
 
 async function testBingSearch() {
-  console.log('🔍 Starting Bing search test...');
+  console.log("🔍 Starting Bing search test...");
 
   try {
-    const query = 'websearchmcp';
+    const query = "websearchmcp";
     const maxResults = 10;
 
     console.log(`📝 Search query: ${query}`);
@@ -22,7 +22,7 @@ async function testBingSearch() {
 
     return results;
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error("❌ Test failed:", error);
     return [];
   }
 }

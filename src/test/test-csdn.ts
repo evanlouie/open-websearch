@@ -1,10 +1,10 @@
-import { searchCsdn } from '../engines/csdn/index.js';
+import { searchCsdn } from "../engines/csdn/index.js";
 
 async function testCsdnSearch() {
-  console.log('🔍 Starting CSDN search test...');
+  console.log("🔍 Starting CSDN search test...");
 
   try {
-    const query = 'websearch mcp';
+    const query = "websearch mcp";
     const maxResults = 10;
 
     console.log(`📝 Search query: ${query}`);
@@ -22,7 +22,7 @@ async function testCsdnSearch() {
 
     return results;
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error("❌ Test failed:", error);
     return [];
   }
 }

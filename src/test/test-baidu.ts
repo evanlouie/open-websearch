@@ -1,10 +1,10 @@
-import { searchBaidu } from '../engines/baidu/index.js';
+import { searchBaidu } from "../engines/baidu/index.js";
 
 async function testBaiduSearch() {
-  console.log('🔍 Starting Baidu search test...');
+  console.log("🔍 Starting Baidu search test...");
 
   try {
-    const query = 'websearch mcp';
+    const query = "websearch mcp";
     const maxResults = 25;
 
     console.log(`📝 Search query: ${query}`);
@@ -22,7 +22,7 @@ async function testBaiduSearch() {
 
     return results;
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error("❌ Test failed:", error);
     return [];
   }
 }

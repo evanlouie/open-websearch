@@ -1,10 +1,10 @@
-import {searchBrave} from "../engines/brave/index.js";
+import { searchBrave } from "../engines/brave/index.js";
 
 async function testBraveSearch() {
-  console.log('🔍 Starting Brave search test...');
+  console.log("🔍 Starting Brave search test...");
 
   try {
-    const query = 'websearchmcp';
+    const query = "websearchmcp";
     const maxResults = 30;
 
     console.log(`📝 Search query: ${query}`);
@@ -22,7 +22,7 @@ async function testBraveSearch() {
 
     return results;
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error("❌ Test failed:", error);
     return [];
   }
 }

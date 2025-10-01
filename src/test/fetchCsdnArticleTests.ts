@@ -1,13 +1,14 @@
-import {fetchCsdnArticle} from "../engines/csdn/fetchCsdnArticle.js";
+import { fetchCsdnArticle } from "../engines/csdn/fetchCsdnArticle.js";
 
 /**
  * Test suite for CSDN article fetching functionality
  */
 async function testFetchCsdnArticle() {
-  console.log('🔍 Starting CSDN article fetch test...');
+  console.log("🔍 Starting CSDN article fetch test...");
 
   try {
-    const url = 'https://blog.csdn.net/weixin_45801664/article/details/149000138';
+    const url =
+      "https://blog.csdn.net/weixin_45801664/article/details/149000138";
 
     console.log(`📝 Fetching article from URL: ${url}`);
 
@@ -16,15 +17,17 @@ async function testFetchCsdnArticle() {
     console.log(`🎉 Article fetched successfully!`);
     console.log(`\n📄 Content preview (first 200 chars):`);
     console.log(`   ${result.content}`);
-    console.log(`\n📊 Total content length: ${result.content.length} characters`);
+    console.log(
+      `\n📊 Total content length: ${result.content.length} characters`,
+    );
 
     return result;
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error("❌ Test failed:", error);
     if (error instanceof Error) {
       console.error(`   Error message: ${error.message}`);
     }
-    return { content: '' };
+    return { content: "" };
   }
 }
 
@@ -32,10 +35,10 @@ async function testFetchCsdnArticle() {
  * Test with an invalid URL to verify error handling
  */
 async function testInvalidUrl() {
-  console.log('\n🔍 Testing with invalid URL...');
+  console.log("\n🔍 Testing with invalid URL...");
 
   try {
-    const invalidUrl = 'https://blog.csdn.net/invalid_path';
+    const invalidUrl = "https://blog.csdn.net/invalid_path";
 
     console.log(`📝 Attempting to fetch from invalid URL: ${invalidUrl}`);
 
@@ -44,11 +47,11 @@ async function testInvalidUrl() {
 
     return result;
   } catch (error) {
-    console.error('❌ Test failed (expected for invalid URL):', error);
+    console.error("❌ Test failed (expected for invalid URL):", error);
     if (error instanceof Error) {
       console.error(`   Error message: ${error.message}`);
     }
-    return { content: '' };
+    return { content: "" };
   }
 }
 
@@ -56,12 +59,12 @@ async function testInvalidUrl() {
  * Run all test cases in sequence
  */
 async function runTests() {
-  console.log('🧪 Running tests for fetchCsdnArticle function\n');
+  console.log("🧪 Running tests for fetchCsdnArticle function\n");
 
   await testFetchCsdnArticle();
   // await testInvalidUrl();
 
-  console.log('\n✅ All tests completed');
+  console.log("\n✅ All tests completed");
 }
 
 // Execute the test suite

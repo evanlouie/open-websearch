@@ -1,10 +1,10 @@
-import { searchLinuxDo } from '../engines/linuxdo/index.js';
+import { searchLinuxDo } from "../engines/linuxdo/index.js";
 
 async function testLinuxDoSearch() {
-  console.log('🔍 Starting LinuxDo search test...');
+  console.log("🔍 Starting LinuxDo search test...");
 
   try {
-    const query = 'websearchmcp';
+    const query = "websearchmcp";
     const maxResults = 20;
 
     console.log(`📝 Search query: ${query}`);
@@ -22,7 +22,7 @@ async function testLinuxDoSearch() {
 
     return results;
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error("❌ Test failed:", error);
     return [];
   }
 }

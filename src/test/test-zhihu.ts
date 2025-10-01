@@ -1,10 +1,10 @@
-import {searchZhiHu} from "../engines/zhihu/zhihu.js";
+import { searchZhiHu } from "../engines/zhihu/zhihu.js";
 
 async function testZhiHuSearch() {
-  console.log('🔍 Starting Zhihu search test...');
+  console.log("🔍 Starting Zhihu search test...");
 
   try {
-    const query = 'websearchmcp';
+    const query = "websearchmcp";
     const maxResults = 20;
 
     console.log(`📝 Search query: ${query}`);
@@ -22,7 +22,7 @@ async function testZhiHuSearch() {
 
     return results;
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error("❌ Test failed:", error);
     return [];
   }
 }

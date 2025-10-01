@@ -1,1 +1,1 @@
-export { searchLinuxDo } from './linuxdo.js';
+export { searchLinuxDo } from "./linuxdo.js";

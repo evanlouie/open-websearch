@@ -1,1 +1,1 @@
-export { fetchGithubReadme } from './github.js';
+export { fetchGithubReadme } from "./github.js";

@@ -1,11 +1,11 @@
-import { searchJuejin } from '../engines/juejin/index.js';
-import { SearchResult } from '../types.js';
+import { searchJuejin } from "../engines/juejin/index.js";
+import { SearchResult } from "../types.js";
 
 async function testJuejin() {
-  console.log('🔍 Starting Juejin search test...');
+  console.log("🔍 Starting Juejin search test...");
 
   try {
-    const query = 'openwebsearch';
+    const query = "openwebsearch";
     const maxResults = 30;
 
     console.log(`📝 Search query: ${query}`);
@@ -23,7 +23,7 @@ async function testJuejin() {
 
     return results;
   } catch (error) {
-    console.error('❌ Test failed:', error);
+    console.error("❌ Test failed:", error);
     return [];
   }
 }

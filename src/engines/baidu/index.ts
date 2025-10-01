@@ -1,1 +1,1 @@
-export { searchBaidu } from './baidu.js';
+export { searchBaidu } from "./baidu.js";

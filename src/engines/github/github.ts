@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from "axios";
 
 /**
  * GitHub README Fetcher - Extract repo info from URLs and fetch README content
@@ -10,34 +10,36 @@ import axios from 'axios';
  * @param url GitHub repository URL
  * @returns {owner, repo} object or null if invalid
  */
-function extractOwnerAndRepo(url: string): { owner: string; repo: string } | null {
-    try {
-        const normalizedUrl = url.trim().toLowerCase();
+function extractOwnerAndRepo(
+  url: string,
+): { owner: string; repo: string } | null {
+  try {
+    const normalizedUrl = url.trim().toLowerCase();
 
-        // Regex patterns for HTTPS and SSH URLs
-        const patterns = [
-            /(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/\s]+)\/([^\/\s]+)/i,
-            /git@github\.com:([^\/\s]+)\/([^\/\s]+)\.git/i
-        ];
+    // Regex patterns for HTTPS and SSH URLs
+    const patterns = [
+      /(?:https?:\/\/)?(?:www\.)?github\.com\/([^\/\s]+)\/([^\/\s]+)/i,
+      /git@github\.com:([^\/\s]+)\/([^\/\s]+)\.git/i,
+    ];
 
-        for (const pattern of patterns) {
-            const match = url.match(pattern);
-            if (match) {
-                const [, owner, rawRepo] = match;
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) {
+        const [, owner, rawRepo] = match;
 
-                // Clean repo name: remove query params, fragments, .git suffix, paths
-                const repo = rawRepo.replace(/(?:[?#].*$|\.git$|\/.*$)/g, '');
-                if (owner && repo && owner.length > 0 && repo.length > 0) {
-                    return { owner: owner.trim(), repo: repo.trim() };
-                }
-            }
+        // Clean repo name: remove query params, fragments, .git suffix, paths
+        const repo = rawRepo.replace(/(?:[?#].*$|\.git$|\/.*$)/g, "");
+        if (owner && repo && owner.length > 0 && repo.length > 0) {
+          return { owner: owner.trim(), repo: repo.trim() };
         }
-
-        return null;
-    } catch (error) {
-        console.error('Failed to parse GitHub URL:', url, error);
-        return null;
+      }
     }
+
+    return null;
+  } catch (error) {
+    console.error("Failed to parse GitHub URL:", url, error);
+    return null;
+  }
 }
 
 /**
@@ -46,47 +48,59 @@ function extractOwnerAndRepo(url: string): { owner: string; repo: string } | nul
  * @param repo Repository name
  * @returns README content string or null if failed
  */
-async function fetchReadme(owner: string, repo: string): Promise<string | null> {
-    if (!owner?.trim() || !repo?.trim()) {
-        console.error('Invalid owner or repo name provided');
-        return null;
+async function fetchReadme(
+  owner: string,
+  repo: string,
+): Promise<string | null> {
+  if (!owner?.trim() || !repo?.trim()) {
+    console.error("Invalid owner or repo name provided");
+    return null;
+  }
+
+  try {
+    const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/readme`;
+    console.error(`Fetching README from: ${apiUrl}`);
+
+    const response = await axios.get(apiUrl, {
+      headers: {
+        Accept: "application/vnd.github.v3.raw",
+        "User-Agent": "GitHub-README-Fetcher/1.0",
+      },
+      timeout: 10000,
+      validateStatus: (status) => status === 200,
+    });
+
+    if (typeof response.data === "string" && response.data.trim()) {
+      return response.data;
+    } else {
+      console.error(`Empty or invalid README content for ${owner}/${repo}`);
+      return null;
     }
-
-    try {
-        const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/readme`;
-        console.error(`Fetching README from: ${apiUrl}`);
-
-        const response = await axios.get(apiUrl, {
-            headers: {
-                'Accept': 'application/vnd.github.v3.raw',
-                'User-Agent': 'GitHub-README-Fetcher/1.0'
-            },
-            timeout: 10000,
-            validateStatus: (status) => status === 200
-        });
-
-        if (typeof response.data === 'string' && response.data.trim()) {
-            return response.data;
-        } else {
-            console.error(`Empty or invalid README content for ${owner}/${repo}`);
-            return null;
-        }
-    } catch (error) {
-        if (axios.isAxiosError(error)) {
-            if (error.response?.status === 404) {
-                console.error(`README not found for ${owner}/${repo}`);
-            } else if (error.code === 'ECONNABORTED') {
-                console.error(`Timeout fetching README for ${owner}/${repo}`);
-            } else {
-                console.error(`Failed to fetch README for ${owner}/${repo}:`, error.message);
-            }
-        } else if (error instanceof Error) {
-            console.error(`Failed to fetch README for ${owner}/${repo}:`, error.message);
-        } else {
-            console.error(`Failed to fetch README for ${owner}/${repo}:`, String(error));
-        }
-        return null;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 404) {
+        console.error(`README not found for ${owner}/${repo}`);
+      } else if (error.code === "ECONNABORTED") {
+        console.error(`Timeout fetching README for ${owner}/${repo}`);
+      } else {
+        console.error(
+          `Failed to fetch README for ${owner}/${repo}:`,
+          error.message,
+        );
+      }
+    } else if (error instanceof Error) {
+      console.error(
+        `Failed to fetch README for ${owner}/${repo}:`,
+        error.message,
+      );
+    } else {
+      console.error(
+        `Failed to fetch README for ${owner}/${repo}:`,
+        String(error),
+      );
     }
+    return null;
+  }
 }
 
 /**
@@ -95,31 +109,35 @@ async function fetchReadme(owner: string, repo: string): Promise<string | null> 
  * @returns README content or null if failed
  */
 async function getReadmeFromUrl(githubUrl: string): Promise<string | null> {
-    console.error(`\n--- Processing URL: ${githubUrl} ---`);
+  console.error(`\n--- Processing URL: ${githubUrl} ---`);
 
-    if (!githubUrl?.trim()) {
-        console.error('Invalid URL provided');
-        return null;
-    }
+  if (!githubUrl?.trim()) {
+    console.error("Invalid URL provided");
+    return null;
+  }
 
-    const repoInfo = extractOwnerAndRepo(githubUrl);
+  const repoInfo = extractOwnerAndRepo(githubUrl);
 
-    if (!repoInfo) {
-        console.error(`Unable to extract owner and repo from URL: ${githubUrl}`);
-        return null;
-    }
+  if (!repoInfo) {
+    console.error(`Unable to extract owner and repo from URL: ${githubUrl}`);
+    return null;
+  }
 
-    console.error(`✅ Extraction successful: ${repoInfo.owner}/${repoInfo.repo}`);
+  console.error(`✅ Extraction successful: ${repoInfo.owner}/${repoInfo.repo}`);
 
-    const content = await fetchReadme(repoInfo.owner, repoInfo.repo);
+  const content = await fetchReadme(repoInfo.owner, repoInfo.repo);
 
-    if (content) {
-        console.error(`✅ README fetched successfully (${content.length} characters)`);
-        return content;
-    } else {
-        console.error(`❌ Failed to fetch README for ${repoInfo.owner}/${repoInfo.repo}`);
-        return null;
-    }
+  if (content) {
+    console.error(
+      `✅ README fetched successfully (${content.length} characters)`,
+    );
+    return content;
+  } else {
+    console.error(
+      `❌ Failed to fetch README for ${repoInfo.owner}/${repoInfo.repo}`,
+    );
+    return null;
+  }
 }
 
 /**
@@ -127,6 +145,8 @@ async function getReadmeFromUrl(githubUrl: string): Promise<string | null> {
  * @param githubUrl GitHub repository URL (supports HTTPS, SSH, with params)
  * @returns README content string or null if failed
  */
-export async function fetchGithubReadme(githubUrl: string): Promise<string | null> {
-    return getReadmeFromUrl(githubUrl);
+export async function fetchGithubReadme(
+  githubUrl: string,
+): Promise<string | null> {
+  return getReadmeFromUrl(githubUrl);
 }
