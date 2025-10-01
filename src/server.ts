@@ -34,8 +34,8 @@ export function addCorsHeaders(res: ServerResponse, enableCors: boolean, corsOri
 // Create and configure MCP server
 export function createMcpServer(): McpServer {
   const server = new McpServer({
-    name: 'web-search',
-    version: '1.2.0'
+    name: 'open-websearch',
+    version: '2.0.0'
   });
 
   setupTools(server);

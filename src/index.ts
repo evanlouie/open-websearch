@@ -2,6 +2,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { config } from "./config.js";
 import { createMcpServer, createHttpServer } from "./server.js";
+import { browserPool } from "./browser/BrowserPool.js";
 
 async function main() {
   // Create MCP server with tools configured
@@ -22,24 +23,35 @@ async function main() {
   if (config.enableHttpServer) {
     console.error('🔌 Starting HTTP server...');
 
-    // Create HTTP server with MCP transports
+    // Create HTTP server with MCP transports (CORS always enabled in v2.0)
     const httpServer = createHttpServer(server, {
-      enableCors: config.enableCors,
-      corsOrigin: config.corsOrigin,
+      enableCors: true,
+      corsOrigin: '*',
     });
 
-    // Read the port number from the environment variable; use the default port 3000 if it is not set.
-    // Setting PORT=0 will let the OS automatically assign an available port
-    const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-
-    httpServer.listen(PORT, '0.0.0.0', () => {
+    httpServer.listen(config.port, '0.0.0.0', () => {
       const address = httpServer.address();
-      const actualPort = typeof address === 'object' && address !== null ? address.port : PORT;
+      const actualPort = typeof address === 'object' && address !== null ? address.port : config.port;
       console.error(`✅ HTTP server running on port ${actualPort}`);
     });
   } else {
     console.error('ℹ️ HTTP server disabled, running in STDIO mode only')
   }
 }
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.error('\n🛑 Shutting down...');
+  await browserPool.close();
+  console.error('✅ Browser pool closed');
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.error('\n🛑 Shutting down...');
+  await browserPool.close();
+  console.error('✅ Browser pool closed');
+  process.exit(0);
+});
 
 main().catch(console.error);

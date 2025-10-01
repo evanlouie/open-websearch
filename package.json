@@ -1,7 +1,7 @@
 {
   "name": "open-websearch",
-  "version": "1.2.0",
-  "description": "web search the internet",
+  "version": "2.0.0",
+  "description": "Multi-engine web search MCP server using Playwright browser automation (Bing, DuckDuckGo, Brave, Google) - zero API keys required",
   "type": "module",
   "bin": {
     "open-websearch": "./src/index.ts"
@@ -13,18 +13,21 @@
     "start": "bun src/index.ts",
     "dev": "bun src/index.ts",
     "test": "bun test",
+    "test:unit": "bun test src/__tests__/unit",
+    "test:integration": "bun test src/__tests__/integration",
+    "test:e2e": "bun test src/__tests__/e2e",
+    "test:performance": "bun test src/__tests__/performance",
+    "test:watch": "bun test --watch",
     "typecheck": "tsc --noEmit",
     "inspector": "bunx @modelcontextprotocol/inspector src/index.ts",
-    "test:stdio": "MODE=stdio bun src/index.ts",
-    "test:http": "MODE=http bun src/index.ts",
-    "test:both": "MODE=both bun src/index.ts"
+    "mode:stdio": "MODE=stdio bun src/index.ts",
+    "mode:http": "MODE=http bun src/index.ts",
+    "mode:both": "MODE=both bun src/index.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.2",
-    "axios": "^1.7.9",
-    "cheerio": "^1.0.0",
-    "https-proxy-agent": "^7.0.6",
-    "jsdom": "^26.1.0"
+    "playwright": "^1.55.1",
+    "zod": "^4.0.0"
   },
   "module": "src/index.ts",
   "private": true,

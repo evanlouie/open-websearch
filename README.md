@@ -1,9 +1,8 @@
 <div align="center">
 
-# Open-WebSearch MCP Server
+# Open-WebSearch v2.0 MCP Server
 
 > **Note:** This is a fork of the original [Aas-ee/open-webSearch](https://github.com/Aas-ee/open-webSearch) project.
-> NPX installation does not work for this fork. Please use the Bunx installation method below.
 
 [![ModelScope](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Aas-ee/3af09e0f4c7821fb2e9acb96483a5ff0/raw/badge.json&color=%23de5a16)](https://www.modelscope.cn/mcp/servers/Aasee1/open-webSearch)
 [![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/Aas-ee/open-webSearch)](https://archestra.ai/mcp-catalog/aas-ee__open-websearch)
@@ -12,554 +11,562 @@
 ![License](https://img.shields.io/github/license/evanlouie/open-websearch)
 ![Issues](https://img.shields.io/github/issues/evanlouie/open-websearch)
 
-
 </div>
 
-A Model Context Protocol (MCP) server based on multi-engine search results, supporting free web search without API keys. Built with Bun runtime and TypeScript, featuring comprehensive integration tests and strict type safety.
+Multi-engine web search MCP server using Playwright browser automation - zero API keys required. Built with Bun runtime and TypeScript, featuring comprehensive test coverage (103 tests) and strict type safety.
+
+---
+
+## ⚠️ Breaking Changes (v2.0)
+
+**v2.0 is a complete architectural rewrite.** See [Migration Guide](docs/migration-v1-to-v2.md) for full details.
+
+### Major Changes
+
+**Removed Features:**
+- ❌ **Docker support** - Local-first design, use `bunx` instead
+- ❌ **Article fetchers** - Use [markitdown MCP](https://github.com/microsoft/markitdown) instead
+- ❌ **HTTP proxy support** - May return in v2.1+ based on demand
+- ❌ **5 search engines** removed - baidu, csdn, linuxdo, juejin, zhihu (focus on quality over quantity)
+
+**New Features:**
+- ✅ **Google search support** - With CAPTCHA detection and error handling
+- ✅ **Playwright browser automation** - Built-in stealth mode for better bot evasion
+- ✅ **Class-based architecture** - `BaseEngine` pattern makes adding engines easy (<30 min, <50 lines)
+- ✅ **Comprehensive testing** - 103 tests (unit, integration, e2e, performance)
+- ✅ **Simplified configuration** - Only 2 env vars needed (PORT, MODE)
+
+**Changed:**
+- 🔄 Search implementation: axios/cheerio → Playwright
+- 🔄 Project structure: nested → flat
+- 🔄 Engine count: 9 → 4 (bing, duckduckgo, brave, google)
+
+---
 
 ## Features
 
-- Web search using multi-engine results
-    - bing
-    - baidu
-    - ~~linux.do~~ temporarily unsupported
-    - csdn
-    - duckduckgo
-    - exa
-    - brave
-    - juejin
-- HTTP proxy configuration support for accessing restricted resources
-- No API keys or authentication required
-- Returns structured results with titles, URLs, and descriptions
-- Configurable number of results per search
-- Customizable default search engine
-- Support for fetching individual article content
-    - csdn
-    - github (README files)
-    - juejin
-- TypeScript strict mode with comprehensive type safety
-- Integration test suite with 16+ tests
-- Multiple transport modes (HTTP, STDIO, or both)
+- **4 High-Quality Search Engines**
+  - **Bing** - Reliable, fast, best overall
+  - **DuckDuckGo** - Privacy-focused
+  - **Brave** - Independent index
+  - **Google** - Best results, but aggressive bot detection (experimental)
 
-## TODO
-- Support for ~~Bing~~ (already supported), ~~DuckDuckGo~~ (already supported), ~~Exa~~ (already supported), ~~Brave~~ (already supported), Google and other search engines
-- Support for more blogs, forums, and social platforms
-- Optimize article content extraction, add support for more sites
-- ~~Support for GitHub README fetching~~ (already supported)
+- **Modern Architecture**
+  - Playwright browser automation with stealth mode
+  - Class-based engine pattern (easy to extend)
+  - Browser pooling for performance (shared, pool, per-search modes)
+  - TypeScript strict mode with zero suppressions
 
-## Installation Guide
+- **Comprehensive Testing**
+  - 103 tests: 54 unit, 20 integration, 11 e2e, 6 performance, 12 browser pool
+  - Automated test suite with Bun test framework
+  - Performance benchmarks (cold start <4s, warm search <2s)
 
-### Bunx Quick Start (Recommended)
+- **Multiple Transport Modes**
+  - HTTP (StreamableHTTP + SSE endpoints)
+  - STDIO (command-line integration)
+  - Both modes simultaneously
 
-The fastest way to get started with this fork:
+- **Zero API Keys Required**
+  - No authentication needed
+  - No rate limits (beyond search engine policies)
+  - Free forever
+
+---
+
+## Installation
+
+### Prerequisites
+
+**Required:**
+- [Bun](https://bun.sh) runtime (v1.0+)
+- Playwright Chromium browser
+
+**Install Playwright browsers (one-time setup):**
+```bash
+bunx playwright install chromium
+```
+
+This downloads ~280MB of browser binaries to `~/.cache/ms-playwright/`.
+
+### Quick Start (Recommended)
+
+Run directly from GitHub using `bunx`:
 
 ```bash
-# Basic usage
+# Basic usage (STDIO mode)
 bunx github:evanlouie/open-websearch
 
 # With environment variables (Linux/macOS)
-DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx github:evanlouie/open-websearch
+MODE=http PORT=3000 bunx github:evanlouie/open-websearch
 
 # Windows PowerShell
-$env:DEFAULT_SEARCH_ENGINE="duckduckgo"; $env:ENABLE_CORS="true"; bunx github:evanlouie/open-websearch
-
-# Windows CMD
-set MODE=stdio && set DEFAULT_SEARCH_ENGINE=duckduckgo && bunx github:evanlouie/open-websearch
-
-# Cross-platform environment variables
-DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx github:evanlouie/open-websearch
-```
-
-> **Note:** NPX installation (`npx open-websearch@latest`) does not work for this fork as it's not published to npm.
-> Use `bunx github:evanlouie/open-websearch` to run directly from GitHub, or clone the repository for local installation.
-
-**Environment Variables:**
-
-| Variable | Default                 | Options | Description |
-|----------|-------------------------|---------|-------------|
-| `ENABLE_CORS` | `false`                 | `true`, `false` | Enable CORS |
-| `CORS_ORIGIN` | `*`                     | Any valid origin | CORS origin configuration |
-| `DEFAULT_SEARCH_ENGINE` | `bing`                  | `bing`, `duckduckgo`, `exa`, `brave`, `baidu`, `csdn`, `juejin` | Default search engine |
-| `USE_PROXY` | `false`                 | `true`, `false` | Enable HTTP proxy |
-| `PROXY_URL` | `http://127.0.0.1:7890` | Any valid URL | Proxy server URL |
-| `MODE` | `both`                  | `both`, `http`, `stdio` | Server mode: both HTTP+STDIO, HTTP only, or STDIO only |
-| `PORT` | `3000`                  | 0-65535 | Server port (set to 0 for automatic port selection) |
-| `ALLOWED_SEARCH_ENGINES` | empty (all available) | Comma-separated engine names | Limit which search engines can be used; if the default engine is not in this list, the first allowed engine becomes the default |
-
-**Common configurations:**
-```bash
-# Enable proxy for restricted regions
-USE_PROXY=true PROXY_URL=http://127.0.0.1:7890 bunx github:evanlouie/open-websearch
-
-# Use automatic port selection (OS assigns available port)
-PORT=0 bunx github:evanlouie/open-websearch
-
-# Full configuration
-DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true USE_PROXY=true PROXY_URL=http://127.0.0.1:7890 PORT=8080 bunx github:evanlouie/open-websearch
+$env:MODE="http"; $env:PORT="3000"; bunx github:evanlouie/open-websearch
 ```
 
 ### Local Installation
 
-1. Clone or download this repository
+1. Clone the repository:
+```bash
+git clone https://github.com/evanlouie/open-websearch.git
+cd open-websearch
+```
+
 2. Install dependencies:
 ```bash
 bun install
 ```
-3. Run the server:
+
+3. Install Playwright browsers:
 ```bash
+bunx playwright install chromium
+```
+
+4. Run the server:
+```bash
+# STDIO mode (for MCP clients)
 bun start
-```
-4. Add the server to your MCP configuration:
 
-**Cherry Studio:**
+# HTTP mode (for API access)
+MODE=http bun start
+
+# Both modes
+MODE=both bun start
+```
+
+---
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Default | Options | Description |
+|----------|---------|---------|-------------|
+| `MODE` | `both` | `stdio`, `http`, `both` | Server transport mode |
+| `PORT` | `3000` | 0-65535 | HTTP server port (0 = auto-assign) |
+
+**v2.0 removed variables:**
+- ❌ `DEFAULT_SEARCH_ENGINE` - Use `engines` parameter in search tool
+- ❌ `ALLOWED_SEARCH_ENGINES` - All engines always available
+- ❌ `USE_PROXY` / `PROXY_URL` - Proxy support removed
+- ❌ `ENABLE_CORS` / `CORS_ORIGIN` - CORS always enabled in HTTP mode
+
+### Browser Configuration
+
+Browser settings are hard-coded for simplicity (may be configurable in v2.1+):
+- **Mode:** `shared` (single browser page reused across searches)
+- **Headless:** `true`
+- **Timeout:** 30 seconds
+- **Stealth:** Always enabled
+
+---
+
+## MCP Client Configuration
+
+### Claude Desktop
+
+Add to `claude_desktop_config.json`:
+
 ```json
 {
   "mcpServers": {
     "web-search": {
-      "name": "Web Search MCP",
-      "type": "streamableHttp",
-      "description": "Multi-engine web search with article fetching",
-      "isActive": true,
-      "baseUrl": "http://localhost:3000/mcp"
-    }
-  }
-}
-```
-
-**VSCode (Claude Dev Extension):**
-```json
-{
-  "mcpServers": {
-    "web-search": {
-      "transport": {
-        "type": "streamableHttp",
-        "url": "http://localhost:3000/mcp"
-      }
-    },
-    "web-search-sse": {
-      "transport": {
-        "type": "sse",
-        "url": "http://localhost:3000/sse"
-      }
-    }
-  }
-}
-```
-
-**Claude Desktop:**
-```json
-{
-  "mcpServers": {
-    "web-search": {
-      "transport": {
-        "type": "streamableHttp",
-        "url": "http://localhost:3000/mcp"
-      }
-    },
-    "web-search-sse": {
-      "transport": {
-        "type": "sse",
-        "url": "http://localhost:3000/sse"
-      }
-    }
-  }
-}
-```
-
-**Bunx Command Line Configuration:**
-```json
-{
-  "mcpServers": {
-    "web-search": {
-      "args": [
-        "github:evanlouie/open-websearch"
-      ],
       "command": "bunx",
+      "args": ["github:evanlouie/open-websearch"],
       "env": {
-        "MODE": "stdio",
-        "DEFAULT_SEARCH_ENGINE": "duckduckgo",
-        "ALLOWED_SEARCH_ENGINES": "duckduckgo,bing,exa"
+        "MODE": "stdio"
       }
     }
   }
 }
 ```
 
-> **Note:** NPX does not work for this fork. Use `bunx` with the GitHub repository path as shown above.
+### Cherry Studio
 
-**Local STDIO Configuration for Cherry Studio (Windows):**
+**STDIO Configuration:**
 ```json
 {
   "mcpServers": {
-    "open-websearch-local": {
-      "command": "bun",
-      "args": ["C:/path/to/your/project/src/index.ts"],
+    "web-search": {
+      "command": "bunx",
+      "args": ["github:evanlouie/open-websearch"],
       "env": {
-        "MODE": "stdio",
-        "DEFAULT_SEARCH_ENGINE": "duckduckgo",
-        "ALLOWED_SEARCH_ENGINES": "duckduckgo,bing,exa"
+        "MODE": "stdio"
       }
     }
   }
 }
 ```
 
-### Docker Deployment
-
-> **Note:** Pre-built Docker images are not available for this fork. You can build locally using the Dockerfile in this repository.
-
-Build and run locally:
-
-```bash
-# Build the Docker image
-docker build -t open-websearch .
-
-# Run the container
-docker run -d --name web-search -p 3000:3000 -e ENABLE_CORS=true -e CORS_ORIGIN=* open-websearch
-```
-
-Or use Docker Compose:
-
-```bash
-docker-compose up -d
-```
-
-Environment variable configuration:
-
-| Variable | Default                 | Options | Description |
-|----------|-------------------------|---------|-------------|
-| `ENABLE_CORS` | `false`                 | `true`, `false` | Enable CORS |
-| `CORS_ORIGIN` | `*`                     | Any valid origin | CORS origin configuration |
-| `DEFAULT_SEARCH_ENGINE` | `bing`                  | `bing`, `duckduckgo`, `exa`, `brave` | Default search engine |
-| `USE_PROXY` | `false`                 | `true`, `false` | Enable HTTP proxy |
-| `PROXY_URL` | `http://127.0.0.1:7890` | Any valid URL | Proxy server URL |
-| `PORT` | `3000`                  | 0-65535 | Server port (set to 0 for automatic port selection) |
-
-Then configure in your MCP client:
+**HTTP Configuration (StreamableHTTP):**
 ```json
 {
   "mcpServers": {
     "web-search": {
       "name": "Web Search MCP",
       "type": "streamableHttp",
-      "description": "Multi-engine web search with article fetching",
+      "description": "Multi-engine web search (Bing, DuckDuckGo, Brave, Google)",
       "isActive": true,
       "baseUrl": "http://localhost:3000/mcp"
-    },
-    "web-search-sse": {
+    }
+  }
+}
+```
+
+### VSCode (Claude Dev Extension)
+
+```json
+{
+  "mcpServers": {
+    "web-search": {
       "transport": {
-        "name": "Web Search MCP",
-        "type": "sse",
-        "description": "Multi-engine web search with article fetching",
-        "isActive": true,
-        "url": "http://localhost:3000/sse"
+        "type": "streamableHttp",
+        "url": "http://localhost:3000/mcp"
       }
     }
   }
 }
 ```
 
-## Usage Guide
+**Local Development (Windows):**
+```json
+{
+  "mcpServers": {
+    "web-search": {
+      "command": "bun",
+      "args": ["C:/path/to/open-websearch/src/index.ts"],
+      "env": {
+        "MODE": "stdio"
+      }
+    }
+  }
+}
+```
 
-The server provides four tools: `search`, `fetchLinuxDoArticle`, `fetchCsdnArticle`, and `fetchGithubReadme`.
+---
 
-### search Tool Usage
+## Usage
 
+### Search Tool
+
+The server provides a single `search` tool for multi-engine web search.
+
+**Parameters:**
 ```typescript
 {
-  "query": string,        // Search query
-  "limit": number,        // Optional: Number of results to return (default: 10)
-  "engines": string[]     // Optional: Engines to use (bing,baidu,linuxdo,csdn,duckduckgo,exa,brave,juejin) default bing
+  "query": string,        // Search query (required)
+  "limit": number,        // Max results to return (default: 10, max: 50)
+  "engines": string[]     // Engines to use (default: ["bing"])
 }
 ```
 
-Usage example:
+**Available engines:**
+- `"bing"` - Bing search (recommended, most reliable)
+- `"duckduckgo"` - DuckDuckGo search
+- `"brave"` - Brave search
+- `"google"` - Google search (experimental, may hit CAPTCHA)
+
+**Example: Single Engine**
 ```typescript
 use_mcp_tool({
   server_name: "web-search",
   tool_name: "search",
   arguments: {
-    query: "search content",
-    limit: 3,  // Optional parameter
-    engines: ["bing", "csdn", "duckduckgo", "exa", "brave", "juejin"] // Optional parameter, supports multi-engine combined search
+    query: "playwright web scraping",
+    limit: 10,
+    engines: ["bing"]
   }
 })
 ```
 
-Response example:
-```json
-[
-  {
-    "title": "Example Search Result",
-    "url": "https://example.com",
-    "description": "Description text of the search result...",
-    "source": "Source",
-    "engine": "Engine used"
-  }
-]
-```
-
-### fetchCsdnArticle Tool Usage
-
-Used to fetch complete content of CSDN blog articles.
-
-```typescript
-{
-  "url": string    // URL from CSDN search results using the search tool
-}
-```
-
-Usage example:
+**Example: Multiple Engines**
 ```typescript
 use_mcp_tool({
   server_name: "web-search",
-  tool_name: "fetchCsdnArticle",
+  tool_name: "search",
   arguments: {
-    url: "https://blog.csdn.net/xxx/article/details/xxx"
+    query: "best web scraping libraries",
+    limit: 15,
+    engines: ["bing", "duckduckgo", "brave"]
   }
 })
 ```
 
-Response example:
+**Response Format:**
 ```json
-[
-  {
-    "content": "Example search result"
-  }
-]
-```
-
-### fetchLinuxDoArticle Tool Usage
-
-Used to fetch complete content of Linux.do forum articles.
-
-```typescript
 {
-  "url": string    // URL from linuxdo search results using the search tool
+  "query": "playwright web scraping",
+  "engines": ["bing"],
+  "totalResults": 10,
+  "results": [
+    {
+      "title": "Playwright: Fast and reliable end-to-end testing",
+      "url": "https://playwright.dev",
+      "description": "Playwright enables reliable end-to-end testing...",
+      "source": "playwright.dev",
+      "engine": "bing"
+    }
+  ]
 }
 ```
 
-Usage example:
-```typescript
-use_mcp_tool({
-  server_name: "web-search",
-  tool_name: "fetchLinuxDoArticle",
-  arguments: {
-    url: "https://xxxx.json"
-  }
-})
-```
+### Error Handling
 
-Response example:
+**Google CAPTCHA Detection:**
 ```json
-[
-  {
-    "content": "Example search result"
-  }
-]
-```
-
-### fetchGithubReadme Tool Usage
-
-Used to fetch README content from GitHub repositories.
-
-```typescript
 {
-  "url": string    // GitHub repository URL (supports HTTPS, SSH formats)
+  "error": "Google search blocked by CAPTCHA. Try using bing, duckduckgo, or brave instead."
 }
 ```
 
-Usage example:
-```typescript
-use_mcp_tool({
-  server_name: "web-search",
-  tool_name: "fetchGithubReadme",
-  arguments: {
-    url: "https://github.com/evanlouie/open-websearch"
-  }
-})
-```
-
-Supported URL formats:
-- HTTPS: `https://github.com/owner/repo`
-- HTTPS with .git: `https://github.com/owner/repo.git`
-- SSH: `git@github.com:owner/repo.git`
-- URLs with parameters: `https://github.com/owner/repo?tab=readme`
-
-Response example:
+**Network Errors:**
 ```json
-[
-  {
-    "content": "<div align=\"center\">\n\n# Open-WebSearch MCP Server..."
-  }
-]
-```
-
-### fetchJuejinArticle Tool Usage
-
-Used to fetch complete content of Juejin articles.
-
-```typescript
 {
-  "url": string    // Juejin article URL from search results
+  "error": "Search failed: Timeout waiting for search results"
 }
 ```
 
-Usage example:
-```typescript
-use_mcp_tool({
-  server_name: "web-search",
-  tool_name: "fetchJuejinArticle",
-  arguments: {
-    url: "https://juejin.cn/post/7520959840199360563"
-  }
-})
-```
+---
 
-Supported URL format:
-- `https://juejin.cn/post/{article_id}`
+## Performance
 
-Response example:
-```json
-[
-  {
-    "content": "🚀 开源 AI 联网搜索工具：Open-WebSearch MCP 全新升级，支持多引擎 + 流式响应..."
-  }
-]
-```
+Based on benchmarks from 103 automated tests:
 
-## Usage Limitations
+| Metric | Target | Typical |
+|--------|--------|---------|
+| **Cold Start** | <4s | ~3.2s |
+| **Warm Search** | <2s | ~1.5s |
+| **Concurrent (5)** | <15s | ~12s |
+| **Browser Init** | <3s | ~2.1s |
 
-Since this tool works by scraping multi-engine search results, please note the following important limitations:
+**Performance Tips:**
+- First search is slower (browser initialization)
+- Subsequent searches reuse browser (much faster)
+- Concurrent searches handled via browser pooling
 
-1. **Rate Limiting**:
-    - Too many searches in a short time may cause the used engines to temporarily block requests
-    - Recommendations:
-        - Maintain reasonable search frequency
-        - Use the limit parameter judiciously
-        - Add delays between searches when necessary
+---
 
-2. **Result Accuracy**:
-    - Depends on the HTML structure of corresponding engines, may fail when engines update
-    - Some results may lack metadata like descriptions
-    - Complex search operators may not work as expected
+## Development
 
-3. **Legal Terms**:
-    - This tool is for personal use only
-    - Please comply with the terms of service of corresponding engines
-    - Implement appropriate rate limiting based on your actual use case
+### Setup
 
-4. **Search Engine Configuration**:
-   - Default search engine can be set via the `DEFAULT_SEARCH_ENGINE` environment variable
-   - Supported engines: bing, duckduckgo, exa, brave
-   - The default engine is used when searching specific websites
-
-5. **Proxy Configuration**:
-   - HTTP proxy can be configured when certain search engines are unavailable in specific regions
-   - Enable proxy with environment variable `USE_PROXY=true`
-   - Configure proxy server address with `PROXY_URL`
-
-## Contributing
-
-Welcome to submit issue reports and feature improvement suggestions!
-
-### Development
-
-This project uses Bun runtime and TypeScript with strict mode enabled.
-
-**Development Commands:**
 ```bash
-# Install dependencies
+# Clone and install
+git clone https://github.com/evanlouie/open-websearch.git
+cd open-websearch
 bun install
+bunx playwright install chromium
 
-# Run the server locally
-bun start
+# Run in development mode
+bun dev
 
 # Run tests
-bun test
+bun test                  # All tests
+bun test:unit             # Unit tests only
+bun test:integration      # Integration tests
+bun test:e2e              # E2E tests (real searches)
+bun test:performance      # Performance benchmarks
 
-# Type checking (must pass with zero errors)
+# Type checking (strict mode)
 bun run typecheck
 
-# Run MCP inspector for testing
+# MCP inspector (testing tool)
 bun inspector
 ```
 
-**Development Requirements:**
-- ✅ All code must pass TypeScript strict mode (`bun run typecheck`)
-- ✅ All integration tests must pass (`bun test`)
+### Adding a New Search Engine
+
+See [Adding Engines Guide](docs/adding-engines.md) for step-by-step instructions.
+
+**Quick Overview:**
+1. Create `src/engines/example.ts`
+2. Extend `BaseEngine` class
+3. Implement `buildSearchUrl()` and `extractResults()`
+4. Register in `src/tools/setupTools.ts`
+5. Add tests
+
+**Time estimate:** <30 minutes
+**Code estimate:** <50 lines
+
+**Example:**
+```typescript
+import { Page } from 'playwright';
+import { BaseEngine } from './BaseEngine.js';
+import { SearchResult } from '../types.js';
+
+export class ExampleEngine extends BaseEngine {
+  readonly name = 'example';
+  readonly baseUrl = 'https://example.com';
+
+  protected buildSearchUrl(query: string): string {
+    return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
+  }
+
+  protected async extractResults(page: Page, limit: number): Promise<SearchResult[]> {
+    await page.waitForSelector('.result');
+    const results = await page.$$eval('.result', (elements) => {
+      return elements.map(el => ({
+        title: el.querySelector('.title')?.textContent?.trim() || '',
+        url: el.querySelector('a')?.getAttribute('href') || '',
+        description: el.querySelector('.desc')?.textContent?.trim() || '',
+        source: el.querySelector('.source')?.textContent?.trim() || '',
+        engine: 'example'
+      })).filter(r => r.url.startsWith('http'));
+    });
+    return results.slice(0, limit);
+  }
+}
+
+export const exampleEngine = new ExampleEngine();
+```
+
+### Project Structure
+
+```
+src/
+├── index.ts                    # Entry point
+├── server.ts                   # MCP server setup
+├── config.ts                   # Configuration (PORT, MODE)
+├── types.ts                    # Core interfaces
+├── browser/
+│   ├── BrowserPool.ts          # Browser lifecycle management
+│   └── stealth.ts              # Stealth configuration
+├── engines/
+│   ├── BaseEngine.ts           # Abstract base class
+│   ├── bing.ts                 # Bing implementation (~40 lines)
+│   ├── duckduckgo.ts           # DuckDuckGo implementation
+│   ├── brave.ts                # Brave implementation
+│   └── google.ts               # Google implementation
+├── tools/
+│   └── setupTools.ts           # MCP search tool registration
+└── __tests__/
+    ├── unit/                   # 54 unit tests
+    ├── integration/            # 20 integration tests
+    ├── e2e/                    # 11 e2e tests
+    └── performance/            # 6 performance tests
+```
+
+### Development Requirements
+
+All code must maintain:
+- ✅ Zero TypeScript errors in strict mode (`bun run typecheck`)
+- ✅ All tests passing (`bun test`)
 - ✅ No `any` types in source code
 - ✅ No TypeScript suppressions (`@ts-ignore`, etc.)
 
-**Testing:**
-- Integration tests are located in `src/__tests__/`
-- Tests cover HTTP server endpoints, CORS, session management, and error handling
-- Run `bun test` before submitting pull requests
+---
 
-**Architecture:**
-- `src/index.ts` - Main entry point
-- `src/server.ts` - HTTP server and MCP server creation (exported for testing)
-- `src/config.ts` - Configuration management
-- `src/engines/` - Search engine implementations
-- `src/tools/` - MCP tool definitions
+## Troubleshooting
 
-### Contributor Guide
+### "Playwright browser not found"
 
-If you want to fork this repository and publish your own Docker image, you need to make the following configurations:
+```bash
+# Install Playwright browsers
+bunx playwright install chromium
+```
 
-#### GitHub Secrets Configuration
+### "Search timeout after 30 seconds"
 
-To enable automatic Docker image building and publishing, please add the following secrets in your GitHub repository settings (Settings → Secrets and variables → Actions):
+- Check internet connection
+- Try a different search engine (Google is most likely to block)
+- Increase timeout in `src/browser/BrowserPool.ts` (may require fork)
 
-**Required Secrets:**
-- `GITHUB_TOKEN`: Automatically provided by GitHub (no setup needed)
+### "Google CAPTCHA detected"
 
-**Optional Secrets (for Alibaba Cloud ACR):**
-- `ACR_REGISTRY`: Your Alibaba Cloud Container Registry URL (e.g., `registry.cn-hangzhou.aliyuncs.com`)
-- `ACR_USERNAME`: Your Alibaba Cloud ACR username
-- `ACR_PASSWORD`: Your Alibaba Cloud ACR password
-- `ACR_IMAGE_NAME`: Your image name in ACR (e.g., `your-namespace/open-web-search`)
+Google aggressively blocks automated requests. Solutions:
+- Use `bing`, `duckduckgo`, or `brave` instead (recommended)
+- Google search is marked experimental for this reason
 
-#### CI/CD Workflow
+### Tests failing
 
-The repository includes a GitHub Actions workflow (`.github/workflows/docker.yml`) that automatically:
+```bash
+# Run only fast tests (unit + integration)
+bun test src/__tests__/unit src/__tests__/integration
 
-1. **Trigger Conditions**:
-    - Push to `main` branch
-    - Push version tags (`v*`)
-    - Manual workflow trigger
+# E2E tests may fail due to network issues or bot detection
+bun test:e2e
 
-2. **Build and Push to**:
-    - GitHub Container Registry (ghcr.io) - always enabled
-    - Alibaba Cloud Container Registry - only enabled when ACR secrets are configured
+# Performance tests are slower
+bun test:performance
+```
 
-3. **Image Tags**:
-    - `ghcr.io/evanlouie/open-websearch:latest`
-    - `your-acr-address/your-image-name:latest` (if ACR is configured)
+---
 
-#### Fork and Publish Steps:
+## Contributing
 
-1. **Fork the repository** to your GitHub account
-2. **Configure secrets** (if you need ACR publishing):
-    - Go to Settings → Secrets and variables → Actions in your forked repository
-    - Add the ACR-related secrets listed above
-3. **Push changes** to the `main` branch or create version tags
-4. **GitHub Actions will automatically build and push** your Docker image
-5. **Use your image**, update the Docker command:
-   ```bash
-   docker run -d --name web-search -p 3000:3000 -e ENABLE_CORS=true -e CORS_ORIGIN=* ghcr.io/evanlouie/open-websearch:latest
-   ```
+Contributions welcome! See [Adding Engines Guide](docs/adding-engines.md) for details.
 
-#### Notes:
-- If you don't configure ACR secrets, the workflow will only publish to GitHub Container Registry
-- Make sure your GitHub repository has Actions enabled
-- The workflow will use your GitHub username (converted to lowercase) as the GHCR image name
+**Development workflow:**
+1. Fork the repository
+2. Create a feature branch
+3. Make changes (maintain TypeScript strict mode)
+4. Run `bun run typecheck` and `bun test`
+5. Submit a pull request
+
+**Areas for contribution:**
+- Additional search engines (Yahoo, Startpage, Ecosia)
+- Improved stealth techniques
+- Performance optimizations
+- Documentation improvements
+
+---
+
+## Limitations
+
+Since this tool uses browser automation for scraping:
+
+1. **Rate Limiting**
+   - Search engines may temporarily block requests if too many searches are made
+   - Recommendation: Maintain reasonable search frequency
+
+2. **Bot Detection**
+   - Google has aggressive bot detection (may require CAPTCHA)
+   - Stealth mode helps but is not foolproof
+   - Use Bing/DuckDuckGo for most reliable results
+
+3. **Maintenance**
+   - HTML structure changes in search engines will break extractors
+   - CSS selectors may need updates over time
+   - E2E tests help catch breakages quickly
+
+4. **Legal/ToS**
+   - This tool is for personal use only
+   - Comply with search engine Terms of Service
+   - Implement rate limiting based on your use case
+
+---
+
+## Migration from v1.x
+
+See [Migration Guide](docs/migration-v1-to-v2.md) for detailed instructions.
+
+**Quick summary:**
+- **Docker users:** Switch to `bunx github:evanlouie/open-websearch`
+- **Article fetcher users:** Use [markitdown MCP](https://github.com/microsoft/markitdown)
+- **Proxy users:** Stay on v1.x or contribute proxy support to v2.x
+- **Removed engine users:** Stay on v1.x or contribute engine implementations
+
+---
 
 <div align="center">
 
 ## Star History
+
 If you find this project helpful, please consider giving it a ⭐ Star!
 
 [![Star History Chart](https://api.star-history.com/svg?repos=evanlouie/open-websearch&type=Date)](https://www.star-history.com/#evanlouie/open-websearch&Date)
 
 </div>
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Original project: [Aas-ee/open-webSearch](https://github.com/Aas-ee/open-webSearch)
+- Built with [Playwright](https://playwright.dev)
+- Powered by [Bun](https://bun.sh)
+- MCP protocol by [Anthropic](https://modelcontextprotocol.io)
