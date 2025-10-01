@@ -265,9 +265,9 @@ The server provides one tool: `search`.
 
 ```typescript
 {
-  "query": string | string[],  // Single search query OR array of queries (max 10)
+  "query": string[],            // Array of search queries (max 10). Single query: ["query text"]
   "limit": number,              // Optional: Number of results to return per query (default: 10)
-  "engines": string[]           // Optional: Engines to use (bing, duckduckgo, brave); default is bing
+  "engines": string[]           // Optional: Engines to use (bing, duckduckgo, brave); default is brave
 }
 ```
 
@@ -278,48 +278,14 @@ use_mcp_tool({
   server_name: "web-search",
   tool_name: "search",
   arguments: {
-    query: "typescript programming",
+    query: ["typescript programming"],
     limit: 5,
-    engines: ["bing", "duckduckgo"],
+    engines: ["brave", "duckduckgo"],
   },
 });
 ```
 
-Single query response format:
-
-The tool returns an MCP response with two content items:
-
-1. **Text summary** (human-readable):
-
-   ```
-   Found 10 results for "typescript programming" using bing, duckduckgo
-   ```
-
-2. **JSON resource** (structured data with `mimeType: "application/json"`):
-
-   ```json
-   {
-     "query": "typescript programming",
-     "engines": ["bing", "duckduckgo"],
-     "totalResults": 10,
-     "results": [
-       {
-         "title": "TypeScript Documentation",
-         "url": "https://www.typescriptlang.org/docs/",
-         "description": "TypeScript is a strongly typed programming language...",
-         "source": "bing",
-         "engine": "bing"
-       }
-     ]
-   }
-   ```
-
-   - URI: `search://query/typescript%20programming/{timestamp}` (e.g., `search://query/typescript%20programming/1609459200000`)
-   - Each execution gets a unique URI to prevent caching issues
-   - MCP-aware clients can detect the JSON structure automatically
-   - Can be surfaced as downloadable attachment or passed to downstream tools
-
-**Multi-Query Example:**
+**Multiple Queries Example:**
 
 ```typescript
 use_mcp_tool({
@@ -328,19 +294,19 @@ use_mcp_tool({
   arguments: {
     query: ["typescript", "javascript", "rust programming"],
     limit: 5,
-    engines: ["bing", "duckduckgo"],
+    engines: ["brave", "duckduckgo"],
   },
 });
 ```
 
-Multi-query response format:
+### Response Format
 
-The tool returns an MCP response with two content items:
+The tool always returns an MCP response with two content items:
 
 1. **Text summary** (human-readable):
 
    ```
-   Completed search for 3 queries using bing, duckduckgo
+   Completed search for 3 queries using brave, duckduckgo
    ```
 
 2. **JSON resource** (structured data with `mimeType: "application/json"`):
@@ -350,21 +316,21 @@ The tool returns an MCP response with two content items:
      "results": [
        {
          "query": "typescript",
-         "engines": ["bing", "duckduckgo"],
+         "engines": ["brave", "duckduckgo"],
          "totalResults": 10,
          "results": [
            {
              "title": "TypeScript",
              "url": "https://www.typescriptlang.org/",
              "description": "TypeScript extends JavaScript...",
-             "source": "bing",
-             "engine": "bing"
+             "source": "brave",
+             "engine": "brave"
            }
          ]
        },
        {
          "query": "javascript",
-         "engines": ["bing", "duckduckgo"],
+         "engines": ["brave", "duckduckgo"],
          "totalResults": 10,
          "results": [
            {
@@ -378,15 +344,15 @@ The tool returns an MCP response with two content items:
        },
        {
          "query": "rust programming",
-         "engines": ["bing", "duckduckgo"],
+         "engines": ["brave", "duckduckgo"],
          "totalResults": 10,
          "results": [
            {
              "title": "Rust Programming Language",
              "url": "https://www.rust-lang.org/",
              "description": "A language empowering everyone...",
-             "source": "bing",
-             "engine": "bing"
+             "source": "brave",
+             "engine": "brave"
            }
          ]
        }
@@ -394,16 +360,18 @@ The tool returns an MCP response with two content items:
    }
    ```
 
-   - URI: `search://multi-query/{timestamp}` (e.g., `search://multi-query/1609459200000`)
+   - URI: `search://query/{timestamp}` (e.g., `search://query/1609459200000`)
+   - Each execution gets a unique URI to prevent caching issues
    - MCP-aware clients can detect the JSON structure automatically
    - Can be surfaced as downloadable attachment or passed to downstream tools
 
 **Important Notes:**
 
-- Multi-query searches execute queries **sequentially per engine** to avoid rate limiting
+- Queries are always passed as arrays (e.g., `["single query"]` for one query, `["query1", "query2"]` for multiple)
+- Multiple queries execute **sequentially per engine** to avoid rate limiting
 - Each search engine processes all queries one at a time
 - All engines run in **parallel** for maximum speed
-- Maximum 10 queries per request to prevent abuse
+- Maximum 10 queries per request
 
 ## Usage Limitations
 

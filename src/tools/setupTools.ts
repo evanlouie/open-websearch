@@ -32,49 +32,6 @@ const distributeLimit = (totalLimit: number, engineCount: number): number[] => {
   );
 };
 
-// Execute search for a single query
-const executeSearch = async (
-  query: string,
-  engines: string[],
-  limit: number,
-): Promise<SearchResult[]> => {
-  // Clean up the query string to ensure it won't cause issues due to spaces or special characters
-  const cleanQuery = query.trim();
-  console.error(
-    `[DEBUG] Executing search, query: "${cleanQuery}", engines: ${engines.join(", ")}, limit: ${limit}`,
-  );
-
-  if (!cleanQuery) {
-    console.error("Query string is empty");
-    throw new Error("Query string cannot be empty");
-  }
-
-  const limits = distributeLimit(limit, engines.length);
-
-  const searchTasks = engines.map((engine, index) => {
-    const engineLimit = limits[index];
-    const searchFn = engineMap[engine as SupportedEngine];
-
-    if (!searchFn) {
-      console.error(`Unsupported search engine: ${engine}`);
-      return Promise.resolve([]);
-    }
-
-    return searchFn(query, engineLimit).catch((error) => {
-      console.error(`Search failed for engine ${engine}:`, error);
-      return [];
-    });
-  });
-
-  try {
-    const results = await Promise.all(searchTasks);
-    return results.flat().slice(0, limit);
-  } catch (error) {
-    console.error("Search execution failed:", error);
-    throw error;
-  }
-};
-
 // Execute multi-query search with per-engine sequential, cross-engine parallel execution
 const executeMultiQuerySearch = async (
   queries: string[],
@@ -206,15 +163,11 @@ export const setupTools = (server: McpServer): void => {
     getSearchDescription(),
     {
       query: z
-        .union([
-          z.string().min(1, "Search query must not be empty"),
-          z
-            .array(z.string().min(1))
-            .min(1, "At least one query is required")
-            .max(10, "Maximum 10 queries allowed"),
-        ])
+        .array(z.string().min(1, "Search query must not be empty"))
+        .min(1, "At least one query is required")
+        .max(10, "Maximum 10 queries allowed")
         .describe(
-          'Search query as a string (e.g., "latest AI news") or array of strings for multi-query search (e.g., ["AI news", "machine learning trends"])',
+          'Array of search queries. For single query, use ["query text"]. For multiple queries, use ["query1", "query2", "query3"]. Maximum 10 queries per request.',
         ),
       limit: z
         .number()
@@ -222,14 +175,14 @@ export const setupTools = (server: McpServer): void => {
         .max(50)
         .default(10)
         .describe(
-          "Maximum number of results to return per query (default: 10)",
+          "Number type: Maximum number of results to return per query (default: 10, range: 1-50)",
         ),
       engines: z
         .array(getEnginesEnum())
         .min(1)
         .default([config.defaultSearchEngine])
         .describe(
-          `Search engines to use (default: [${config.defaultSearchEngine}])`,
+          `Array of strings: Search engines to use. Example: ["brave", "duckduckgo"]. Default: ["${config.defaultSearchEngine}"]`,
         )
         .transform((requestedEngines) => {
           // If allowed search engines are configured, filter requested engines
@@ -248,72 +201,34 @@ export const setupTools = (server: McpServer): void => {
     },
     async ({ query, limit = 10, engines = ["bing"] }) => {
       try {
-        // Check if query is an array or a single string
-        const isMultiQuery = Array.isArray(query);
+        console.error(
+          `Searching for ${query.length} ${query.length === 1 ? "query" : "queries"}: [${query.map((q: string) => `"${q}"`).join(", ")}] using engines: ${engines.join(", ")}`,
+        );
 
-        if (isMultiQuery) {
-          console.error(
-            `Searching for multiple queries: [${query.map((q) => `"${q}"`).join(", ")}] using engines: ${engines.join(", ")}`,
-          );
+        const results = await executeMultiQuerySearch(query, engines, limit);
 
-          const results = await executeMultiQuerySearch(query, engines, limit);
-
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Completed search for ${query.length} ${query.length === 1 ? "query" : "queries"} using ${engines.join(", ")}`,
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Completed search for ${query.length} ${query.length === 1 ? "query" : "queries"} using ${engines.join(", ")}`,
+            },
+            {
+              type: "resource",
+              resource: {
+                uri: `search://query/${Date.now()}`,
+                mimeType: "application/json",
+                text: JSON.stringify(
+                  {
+                    results,
+                  },
+                  null,
+                  2,
+                ),
               },
-              {
-                type: "resource",
-                resource: {
-                  uri: `search://multi-query/${Date.now()}`,
-                  mimeType: "application/json",
-                  text: JSON.stringify(
-                    {
-                      results,
-                    },
-                    null,
-                    2,
-                  ),
-                },
-              },
-            ],
-          };
-        } else {
-          console.error(
-            `Searching for "${query}" using engines: ${engines.join(", ")}`,
-          );
-
-          const results = await executeSearch(query.trim(), engines, limit);
-          const cleanQuery = query.trim();
-
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Found ${results.length} result${results.length === 1 ? "" : "s"} for "${cleanQuery}" using ${engines.join(", ")}`,
-              },
-              {
-                type: "resource",
-                resource: {
-                  uri: `search://query/${encodeURIComponent(cleanQuery)}/${Date.now()}`,
-                  mimeType: "application/json",
-                  text: JSON.stringify(
-                    {
-                      query: cleanQuery,
-                      engines: engines,
-                      totalResults: results.length,
-                      results: results,
-                    },
-                    null,
-                    2,
-                  ),
-                },
-              },
-            ],
-          };
-        }
+            },
+          ],
+        };
       } catch (error) {
         console.error("Search tool execution failed:", error);
         return {
