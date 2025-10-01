@@ -418,15 +418,15 @@ class BrowserPool {
 }
 
 // Export singleton instance
-export const browserPool = new BrowserPool({ mode: "shared" });
+export const browserPool = new BrowserPool({ mode: "pool" });
 ```
 
 **Browser Modes Explained:**
 
 | Mode                 | Behavior              | Use Case                | Pros                      | Cons                    |
 | -------------------- | --------------------- | ----------------------- | ------------------------- | ----------------------- |
-| **shared** (default) | Single page reused    | Low-traffic MCP servers | Fastest, lowest memory    | Potential state leakage |
-| **pool**             | Pool of N pages       | Medium-traffic servers  | Balance speed & isolation | More memory             |
+| **shared**           | Single page reused    | Low-traffic MCP servers | Fastest, lowest memory    | Potential state leakage |
+| **pool** (default)   | Pool of N pages       | Medium-traffic servers  | Balance speed & isolation | More memory             |
 | **per-search**       | New page every search | High-isolation needs    | Complete isolation        | Slowest, most memory    |
 
 ### 2.6 Stealth Configuration
@@ -449,10 +449,13 @@ export function getStealthConfig() {
 export const stealthArgs = [
   "--disable-blink-features=AutomationControlled",
   "--disable-dev-shm-usage",
-  "--no-sandbox",
-  "--disable-setuid-sandbox",
   "--disable-features=IsolateOrigins,site-per-process",
-  "--disable-web-security",
+  "--disable-gpu",
+  "--disable-software-rasterizer",
+  "--disable-extensions",
+  "--disable-component-extensions-with-background-pages",
+  "--no-first-run",
+  "--no-default-browser-check",
   // Randomization could be added here
 ];
 

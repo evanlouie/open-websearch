@@ -11,19 +11,56 @@ import {
   Server,
 } from "node:http";
 
+const MAX_BODY_SIZE = 512 * 1024; // 512KB guard against abuse
+
+export class HttpError extends Error {
+  constructor(public statusCode: number, message: string) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
 // Helper to parse JSON from IncomingMessage
-export async function parseBody(req: IncomingMessage): Promise<unknown> {
+export async function parseBody(
+  req: IncomingMessage,
+  maxBytes: number = MAX_BODY_SIZE,
+): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk) => (body += chunk));
+    let received = 0;
+    let limitExceeded = false;
+
+    req.on("data", (chunk) => {
+      if (limitExceeded) {
+        return;
+      }
+
+      received += chunk.length;
+      if (received > maxBytes) {
+        limitExceeded = true;
+        reject(new HttpError(413, "Payload too large"));
+        return;
+      }
+      body += chunk;
+    });
+
     req.on("end", () => {
+      if (limitExceeded) {
+        return;
+      }
       try {
         resolve(body ? JSON.parse(body) : {});
       } catch (err) {
-        reject(err);
+        reject(new HttpError(400, "Invalid JSON body"));
       }
     });
-    req.on("error", reject);
+    req.on("error", (error) => {
+      reject(
+        error instanceof HttpError
+          ? error
+          : new HttpError(400, "Request stream error"),
+      );
+    });
   });
 }
 
@@ -200,8 +237,20 @@ export function createHttpServer(
       } catch (error) {
         console.error("Error handling request:", error);
         if (!res.headersSent) {
-          res.writeHead(500);
-          res.end("Internal Server Error");
+          if (error instanceof HttpError) {
+            const status = error.statusCode;
+            const message = error.message;
+            if (method === "HEAD") {
+              res.writeHead(status);
+              res.end();
+            } else {
+              res.writeHead(status, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: { message, status } }));
+            }
+          } else {
+            res.writeHead(500);
+            res.end("Internal Server Error");
+          }
         }
       }
     },

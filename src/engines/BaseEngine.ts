@@ -36,7 +36,10 @@ export abstract class BaseEngine implements SearchEngine {
       await applyStealthConfig(page);
 
       const searchUrl = this.buildSearchUrl(query);
-      await page.goto(searchUrl, { waitUntil: "domcontentloaded" });
+      await page.goto(searchUrl, {
+        waitUntil: "domcontentloaded",
+        timeout: browserPool.getNavigationTimeout(),
+      });
 
       return await this.extractResults(page, limit);
     } finally {
@@ -50,7 +53,9 @@ export abstract class BaseEngine implements SearchEngine {
   async healthCheck(): Promise<boolean> {
     const page = await browserPool.getPage();
     try {
-      const response = await page.goto(this.baseUrl, { timeout: 5000 });
+      const response = await page.goto(this.baseUrl, {
+        timeout: browserPool.getNavigationTimeout(),
+      });
       return response?.ok() ?? false;
     } catch {
       return false;

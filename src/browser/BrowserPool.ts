@@ -1,16 +1,29 @@
 import { Browser, Page, chromium } from "playwright";
-import { BrowserPoolConfig, BrowserMode } from "../types.js";
+import { BrowserPoolConfig } from "../types.js";
 import { getStealthArgs } from "./stealth.js";
+
+type PoolWaiter = {
+  resolve: (page: Page) => void;
+  reject: (error: unknown) => void;
+};
 
 export class BrowserPool {
   private browser: Browser | null = null;
   private pagePool: Page[] = [];
   private config: BrowserPoolConfig;
+  private sharedPage: Page | null = null;
+  private sharedInUse = false;
+  private sharedWaitQueue: Array<{
+    resolve: (page: Page) => void;
+    reject: (error: unknown) => void;
+  }> = [];
+  private poolWaitQueue: PoolWaiter[] = [];
+  private activePooledPages = 0;
 
   constructor(config?: Partial<BrowserPoolConfig>) {
     this.config = {
-      mode: config?.mode || "shared",
-      poolSize: config?.poolSize || 5,
+      mode: config?.mode || "pool",
+      poolSize: Math.max(1, config?.poolSize || 5),
       timeout: config?.timeout || 30000,
       headless: config?.headless ?? true,
     };
@@ -28,13 +41,47 @@ export class BrowserPool {
 
       // Handle unexpected browser crashes
       this.browser.on("disconnected", () => {
-        console.error("⚠️ Browser disconnected unexpectedly");
+        console.error(
+          "⚠️ Browser disconnected unexpectedly — resetting pool state",
+        );
+
+        const disconnectError = new Error("Browser disconnected");
+
+        for (const waiter of this.poolWaitQueue.splice(0)) {
+          waiter.reject(disconnectError);
+        }
+
+        for (const waiter of this.sharedWaitQueue.splice(0)) {
+          waiter.reject(disconnectError);
+        }
+
         this.browser = null;
         this.pagePool = [];
+        this.activePooledPages = 0;
+        this.sharedPage = null;
+        this.sharedInUse = false;
+        this.poolWaitQueue = [];
+        this.sharedWaitQueue = [];
       });
     }
 
     return this.browser;
+  }
+
+  private applyPageDefaults(page: Page): void {
+    try {
+      page.setDefaultTimeout(this.config.timeout || 30000);
+      page.setDefaultNavigationTimeout(this.config.timeout || 30000);
+    } catch (error) {
+      console.error("⚠️ Failed to apply default timeouts to page", error);
+    }
+  }
+
+  private async createConfiguredPage(): Promise<Page> {
+    const browser = await this.initBrowser();
+    const page = await browser.newPage();
+    this.applyPageDefaults(page);
+    return page;
   }
 
   /**
@@ -57,35 +104,66 @@ export class BrowserPool {
    * Shared mode: Single page reused for all searches
    */
   private async getSharedPage(): Promise<Page> {
-    if (this.pagePool.length === 0) {
-      const browser = await this.initBrowser();
-      const page = await browser.newPage();
-      this.pagePool.push(page);
+    if (!this.sharedInUse) {
+      this.sharedInUse = true;
+      try {
+        if (!this.sharedPage || this.sharedPage.isClosed()) {
+          this.sharedPage = await this.createConfiguredPage();
+        }
+
+        this.applyPageDefaults(this.sharedPage);
+        return this.sharedPage;
+      } catch (error) {
+        this.sharedInUse = false;
+        const pending = this.sharedWaitQueue.splice(0);
+        for (const waiter of pending) {
+          waiter.reject(error);
+        }
+        throw error;
+      }
     }
-    return this.pagePool[0];
+
+    return await new Promise<Page>((resolve, reject) => {
+      this.sharedWaitQueue.push({ resolve, reject });
+    });
   }
 
   /**
    * Pool mode: Maintain pool of pages, reuse from pool
    */
   private async getPooledPage(): Promise<Page> {
-    const browser = await this.initBrowser();
-
-    // Return existing page from pool if available
     if (this.pagePool.length > 0) {
-      return this.pagePool.pop()!;
+      const page = this.pagePool.pop()!;
+      if (page.isClosed()) {
+        this.activePooledPages = Math.max(0, this.activePooledPages - 1);
+        return this.getPooledPage();
+      }
+      this.applyPageDefaults(page);
+      return page;
     }
 
-    // Create new page if under pool limit
-    return await browser.newPage();
+    if (this.activePooledPages < (this.config.poolSize || 5)) {
+      this.activePooledPages += 1;
+      try {
+        const page = await this.createConfiguredPage();
+        return page;
+      } catch (error) {
+        this.activePooledPages -= 1;
+        throw error;
+      }
+    }
+
+    return await new Promise<Page>((resolve, reject) => {
+      this.poolWaitQueue.push({ resolve, reject });
+    });
   }
 
   /**
    * Per-search mode: New page for every search
    */
   private async getNewPage(): Promise<Page> {
-    const browser = await this.initBrowser();
-    return await browser.newPage();
+    const page = await this.createConfiguredPage();
+    return page;
   }
 
   /**
@@ -94,24 +172,94 @@ export class BrowserPool {
   async releasePage(page: Page): Promise<void> {
     switch (this.config.mode) {
       case "shared":
-        // Keep page open, just clear cookies/cache
-        await page.context().clearCookies();
+        await this.resetPage(page);
+
+        const nextSharedWaiter = this.sharedWaitQueue.shift();
+        if (nextSharedWaiter) {
+          try {
+            if (!this.sharedPage || this.sharedPage.isClosed()) {
+              this.sharedPage = await this.createConfiguredPage();
+            }
+            this.applyPageDefaults(this.sharedPage);
+            this.sharedInUse = true;
+            nextSharedWaiter.resolve(this.sharedPage);
+          } catch (error) {
+            this.sharedInUse = false;
+            nextSharedWaiter.reject(error);
+            const remaining = this.sharedWaitQueue.splice(0);
+            for (const waiter of remaining) {
+              waiter.reject(error);
+            }
+            throw error;
+          }
+        } else {
+          this.sharedInUse = false;
+          if (page.isClosed()) {
+            this.sharedPage = null;
+          }
+        }
         break;
 
       case "pool":
-        // Return to pool if under limit, otherwise close
-        if (this.pagePool.length < (this.config.poolSize || 5)) {
-          await page.context().clearCookies();
-          this.pagePool.push(page);
-        } else {
-          await page.close();
+        await this.resetPage(page);
+
+        if (page.isClosed()) {
+          this.activePooledPages = Math.max(0, this.activePooledPages - 1);
+        }
+
+        const waiter = this.poolWaitQueue.shift();
+        if (waiter) {
+          if (!page.isClosed()) {
+            waiter.resolve(page);
+            return;
+          }
+
+          try {
+            const replacement = await this.createConfiguredPage();
+            this.activePooledPages += 1;
+            waiter.resolve(replacement);
+          } catch (error) {
+            waiter.reject(error);
+            const remainingWaiters = this.poolWaitQueue.splice(0);
+            for (const pending of remainingWaiters) {
+              pending.reject(error);
+            }
+            throw error;
+          }
+          return;
+        }
+
+        if (!page.isClosed()) {
+          if (this.pagePool.length < (this.config.poolSize || 5)) {
+            this.pagePool.push(page);
+          } else {
+            await page.close().catch(() => {});
+            this.activePooledPages = Math.max(0, this.activePooledPages - 1);
+          }
         }
         break;
 
       case "per-search":
         // Always close
-        await page.close();
+        await page.close().catch(() => {});
         break;
+    }
+  }
+
+  private async resetPage(page: Page): Promise<void> {
+    if (page.isClosed()) {
+      return;
+    }
+
+    try {
+      await page.context().clearCookies();
+    } catch (error) {
+      console.error("⚠️ Failed to clear cookies for page", error);
+      try {
+        await page.close();
+      } catch {
+        // ignore secondary failures
+      }
     }
   }
 
@@ -120,10 +268,23 @@ export class BrowserPool {
    */
   async close(): Promise<void> {
     // Close all pages
+    for (const waiter of this.poolWaitQueue.splice(0)) {
+      waiter.reject(new Error("Browser pool shut down"));
+    }
+
+    for (const waiter of this.sharedWaitQueue.splice(0)) {
+      waiter.reject(new Error("Browser pool shut down"));
+    }
+
     for (const page of this.pagePool) {
       await page.close().catch(() => {});
     }
     this.pagePool = [];
+    this.sharedPage = null;
+    this.sharedInUse = false;
+    this.activePooledPages = 0;
+    this.poolWaitQueue = [];
+    this.sharedWaitQueue = [];
 
     // Close browser with timeout to prevent hanging
     if (this.browser) {
@@ -135,7 +296,11 @@ export class BrowserPool {
       this.browser = null;
     }
   }
+
+  getNavigationTimeout(): number {
+    return this.config.timeout || 30000;
+  }
 }
 
 // Export singleton instance
-export const browserPool = new BrowserPool({ mode: "shared" });
+export const browserPool = new BrowserPool({ mode: "pool" });

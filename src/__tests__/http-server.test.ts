@@ -118,6 +118,32 @@ describe("HTTP Server Integration Tests", () => {
       expect(text).toBe("No transport found for sessionId");
     });
 
+    test("POST /mcp with malformed JSON returns 400", async () => {
+      const response = await fetch(`${serverUrl}/mcp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{invalid",
+      });
+
+      expect(response.status).toBe(400);
+      const data = await response.json();
+      expect(data.error.message).toContain("Invalid JSON body");
+    });
+
+    test("POST /mcp rejects payloads exceeding 512KB", async () => {
+      const largePayload = `{"data":"${"a".repeat(600_000)}"}`;
+
+      const response = await fetch(`${serverUrl}/mcp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: largePayload,
+      });
+
+      expect(response.status).toBe(413);
+      const data = await response.json();
+      expect(data.error.message).toContain("Payload too large");
+    });
+
     test("GET /sse creates SSE transport", async () => {
       // Make SSE request
       const response = await fetch(`${serverUrl}/sse`, {

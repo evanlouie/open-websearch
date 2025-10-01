@@ -9,14 +9,15 @@ export function getStealthArgs(): string[] {
     // Disable automation flags
     "--disable-blink-features=AutomationControlled",
 
-    // Performance and resource optimizations
-    "--disable-dev-shm-usage",
+    // Sandbox compatibility: required when running as root (Docker/CI)
     "--no-sandbox",
     "--disable-setuid-sandbox",
 
+    // Performance and resource optimizations
+    "--disable-dev-shm-usage",
+
     // Additional stealth measures
     "--disable-features=IsolateOrigins,site-per-process",
-    "--disable-web-security",
 
     // GPU and rendering
     "--disable-gpu",

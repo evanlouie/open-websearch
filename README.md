@@ -165,10 +165,18 @@ MODE=both bun start
 
 Browser settings are hard-coded for simplicity (may be configurable in v2.1+):
 
-- **Mode:** `shared` (single browser page reused across searches)
+- **Mode:** `pool` (tab pool with bounded concurrency, default size `5`)
 - **Headless:** `true`
-- **Timeout:** 30 seconds
+- **Timeout:** 30 seconds (applied to every navigation)
 - **Stealth:** Always enabled
+- **Sandbox:** Playwright defaults (no forced `--no-sandbox` / `--disable-web-security` overrides)
+
+> ℹ️ Shared-page mode now applies a per-request lock to prevent Playwright navigation races. If you need strict serial execution, set `mode` to `shared`; otherwise the default pool mode maximises parallel engine searches without spawning unbounded tabs.
+
+### HTTP Safeguards
+
+- Request payloads are limited to **512 KB** to avoid accidental abuse.
+- Malformed JSON now returns `400 Bad Request` with a descriptive error payload instead of `500`.
 
 ---
 

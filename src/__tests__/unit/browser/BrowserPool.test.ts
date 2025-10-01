@@ -34,16 +34,17 @@ describe("BrowserPool", () => {
   });
 
   describe("Shared Mode", () => {
-    test("reuses single page for all searches", async () => {
+    test("returns same page after release", async () => {
       const pool = new BrowserPool({ mode: "shared", headless: true });
 
       const page1 = await pool.getPage();
+      await pool.releasePage(page1);
+
       const page2 = await pool.getPage();
 
-      // In shared mode, should return the same page
+      // In shared mode, subsequent borrowers receive the same page instance
       expect(page1).toBe(page2);
 
-      await pool.releasePage(page1);
       await pool.releasePage(page2);
       await pool.close();
     });
@@ -75,6 +76,37 @@ describe("BrowserPool", () => {
       await pool.releasePage(page2);
       await pool.close();
     });
+
+    test(
+      "resets lock when page creation fails",
+      async () => {
+        const pool = new BrowserPool({ mode: "shared", headless: true });
+        const originalCreate = (pool as any).createConfiguredPage.bind(pool);
+        let attempts = 0;
+
+        (pool as any).createConfiguredPage = async () => {
+          attempts += 1;
+          if (attempts === 1) {
+            throw new Error("Test page creation failure");
+          }
+          return originalCreate();
+        };
+
+        try {
+          await expect(pool.getPage()).rejects.toThrow(
+            "Test page creation failure",
+          );
+
+          const page = await pool.getPage();
+          expect(page).toBeDefined();
+          await pool.releasePage(page);
+        } finally {
+          (pool as any).createConfiguredPage = originalCreate;
+          await pool.close();
+        }
+      },
+      { timeout: 15000 },
+    );
   });
 
   describe("Pool Mode", () => {
@@ -109,7 +141,7 @@ describe("BrowserPool", () => {
     );
 
     test(
-      "closes pages when pool exceeds poolSize",
+      "enforces pool size limit and queues excess requests",
       async () => {
         const pool = new BrowserPool({
           mode: "pool",
@@ -118,19 +150,32 @@ describe("BrowserPool", () => {
         });
 
         try {
-          // Get 3 pages
+          // Get 2 pages (fills the pool to capacity)
           const page1 = await pool.getPage();
           const page2 = await pool.getPage();
-          const page3 = await pool.getPage();
 
-          // Release all pages
+          // Try to get a third page - this should block until a page is released
+          let page3Resolved = false;
+          const page3Promise = pool.getPage().then((page) => {
+            page3Resolved = true;
+            return page;
+          });
+
+          // Give it a moment to ensure page3 is waiting
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          expect(page3Resolved).toBe(false);
+
+          // Release page1 - this should unblock page3
           await pool.releasePage(page1);
-          await pool.releasePage(page2);
-          // page3 should be closed when released because pool is full
-          await pool.releasePage(page3);
 
-          // Verify page3 is closed
-          expect(page3.isClosed()).toBe(true);
+          // page3 should now resolve
+          const page3 = await page3Promise;
+          expect(page3Resolved).toBe(true);
+          expect(page3).toBeDefined();
+
+          // Clean up
+          await pool.releasePage(page2);
+          await pool.releasePage(page3);
         } finally {
           await pool.close();
         }
