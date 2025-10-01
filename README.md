@@ -22,13 +22,14 @@ A Model Context Protocol (MCP) server based on multi-engine search results, supp
   - bing
   - duckduckgo
   - brave
+- **Multi-query search support** - search multiple queries in a single request (up to 10 queries)
 - HTTP proxy configuration support for accessing restricted resources
 - No API keys or authentication required
 - Returns structured results with titles, URLs, and descriptions
 - Configurable number of results per search
 - Customizable default search engine
 - TypeScript strict mode with comprehensive type safety
-- Integration test suite with 16+ tests
+- Integration test suite with 22+ tests
 - Multiple transport modes (HTTP, STDIO, or both)
 
 ## TODO
@@ -264,39 +265,116 @@ The server provides one tool: `search`.
 
 ```typescript
 {
-  "query": string,        // Search query
-  "limit": number,        // Optional: Number of results to return (default: 10)
-  "engines": string[]     // Optional: Engines to use (bing, duckduckgo, brave); default is bing
+  "query": string | string[],  // Single search query OR array of queries (max 10)
+  "limit": number,              // Optional: Number of results to return per query (default: 10)
+  "engines": string[]           // Optional: Engines to use (bing, duckduckgo, brave); default is bing
 }
 ```
 
-Usage example:
+**Single Query Example:**
 
 ```typescript
 use_mcp_tool({
   server_name: "web-search",
   tool_name: "search",
   arguments: {
-    query: "search content",
-    limit: 3, // Optional parameter
-    engines: ["bing", "duckduckgo", "brave"], // Optional parameter, supports multi-engine combined search
+    query: "typescript programming",
+    limit: 5,
+    engines: ["bing", "duckduckgo"],
   },
 });
 ```
 
-Response example:
+Single query response format:
 
 ```json
-[
-  {
-    "title": "Example Search Result",
-    "url": "https://example.com",
-    "description": "Description text of the search result...",
-    "source": "Source",
-    "engine": "Engine used"
-  }
-]
+{
+  "query": "typescript programming",
+  "engines": ["bing", "duckduckgo"],
+  "totalResults": 10,
+  "results": [
+    {
+      "title": "TypeScript Documentation",
+      "url": "https://www.typescriptlang.org/docs/",
+      "description": "TypeScript is a strongly typed programming language...",
+      "source": "bing",
+      "engine": "bing"
+    }
+  ]
+}
 ```
+
+**Multi-Query Example:**
+
+```typescript
+use_mcp_tool({
+  server_name: "web-search",
+  tool_name: "search",
+  arguments: {
+    query: ["typescript", "javascript", "rust programming"],
+    limit: 5,
+    engines: ["bing", "duckduckgo"],
+  },
+});
+```
+
+Multi-query response format:
+
+```json
+{
+  "results": [
+    {
+      "query": "typescript",
+      "engines": ["bing", "duckduckgo"],
+      "totalResults": 10,
+      "results": [
+        {
+          "title": "TypeScript",
+          "url": "https://www.typescriptlang.org/",
+          "description": "TypeScript extends JavaScript...",
+          "source": "bing",
+          "engine": "bing"
+        }
+      ]
+    },
+    {
+      "query": "javascript",
+      "engines": ["bing", "duckduckgo"],
+      "totalResults": 10,
+      "results": [
+        {
+          "title": "JavaScript | MDN",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+          "description": "JavaScript (JS) is a lightweight interpreted...",
+          "source": "duckduckgo",
+          "engine": "duckduckgo"
+        }
+      ]
+    },
+    {
+      "query": "rust programming",
+      "engines": ["bing", "duckduckgo"],
+      "totalResults": 10,
+      "results": [
+        {
+          "title": "Rust Programming Language",
+          "url": "https://www.rust-lang.org/",
+          "description": "A language empowering everyone...",
+          "source": "bing",
+          "engine": "bing"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Important Notes:**
+
+- Multi-query searches execute queries **sequentially per engine** to avoid rate limiting
+- Each search engine processes all queries one at a time
+- All engines run in **parallel** for maximum speed
+- Maximum 10 queries per request to prevent abuse
 
 ## Usage Limitations
 
@@ -304,10 +382,15 @@ Since this tool works by scraping multi-engine search results, please note the f
 
 1. **Rate Limiting**:
    - Too many searches in a short time may cause the used engines to temporarily block requests
+   - Multi-query searches are designed to minimize rate limit risks:
+     - Queries are executed **sequentially** for each engine (one at a time)
+     - Engines run in **parallel** (all engines work simultaneously)
+     - This prevents overwhelming any single search engine
    - Recommendations:
      - Maintain reasonable search frequency
      - Use the limit parameter judiciously
-     - Add delays between searches when necessary
+     - Limit multi-query requests to 10 queries maximum (enforced)
+     - Add delays between large batch requests when necessary
 
 2. **Result Accuracy**:
    - Depends on the HTML structure of corresponding engines, may fail when engines update

@@ -110,8 +110,9 @@ Key configuration variables:
 ### MCP Tools Registration
 
 - **`src/tools/setupTools.ts`**: Registers all MCP tools with the server
-  - `search`: Multi-engine web search
+  - `search`: Multi-engine web search supporting single or multiple queries (max 10)
   - Handles search result distribution across multiple engines
+  - Implements per-engine sequential, cross-engine parallel execution for multi-query searches
 
 ### Search Engine Architecture
 
@@ -199,19 +200,21 @@ These are standalone test scripts that directly import and test engine functions
 **IMPORTANT:** After making any code changes:
 
 1. **Always remove old/stale code** - Delete unused functions, commented-out code, deprecated implementations, and dead code paths. Keep the codebase clean and maintainable.
-2. Ensure all relevant documentation is updated so it stays accurate.
-3. Run `bunx tsc --noEmit` and confirm it passes with zero errors.
-4. Run `bun run typecheck` to ensure TypeScript strict mode compliance.
-5. Run `bun test` to verify all tests pass.
-6. Run `bunx prettier --write .` to keep formatting consistent.
-7. Test the affected functionality manually if needed.
+2. **Update README.md** - If you added, changed, or removed features/tools, update the README with examples, usage instructions, and feature descriptions.
+3. Ensure all relevant documentation is updated so it stays accurate (CLAUDE.md, inline comments, etc.).
+4. Run `bunx tsc --noEmit` and confirm it passes with zero errors.
+5. Run `bun run typecheck` to ensure TypeScript strict mode compliance.
+6. Run `bun test` to verify all tests pass.
+7. Run `bunx prettier --write .` to keep formatting consistent.
+8. Test the affected functionality manually if needed.
 
 The project MUST maintain:
 
 - ✅ Zero TypeScript errors in strict mode (`strict: true` in tsconfig.json)
 - ✅ Zero `any` types in source code (use `unknown`, proper interfaces, or type guards)
 - ✅ Zero TypeScript suppressions (`@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`)
-- ✅ All integration tests passing (16+ tests covering HTTP endpoints, CORS, sessions, errors)
+- ✅ All integration tests passing (22+ tests covering HTTP endpoints, CORS, sessions, errors, multi-query)
+- ✅ README.md kept up-to-date with all features and usage examples
 
 **Type Safety Guidelines:**
 
