@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Architecture:** v2.0 uses Playwright-based browser automation with a class-based engine pattern (`BaseEngine`). This is a complete rewrite from v1.x which used axios + cheerio.
 
 **Key Differences from v1.x:**
+
 - ❌ Removed: Docker, article fetchers, proxy support, 5 engines (baidu, csdn, linuxdo, juejin, zhihu)
 - ✅ Added: Google search, Playwright stealth mode, BaseEngine pattern, comprehensive testing (103 tests)
 
@@ -91,6 +92,7 @@ MODE=http PORT=3000 bunx github:evanlouie/open-websearch
 ### Transport Modes
 
 The server supports three operational modes via the `MODE` environment variable:
+
 - **`both`** (default): Runs both HTTP server and STDIO transport
 - **`http`**: HTTP server only (SSE and StreamableHTTP endpoints)
 - **`stdio`**: STDIO transport only (for direct process communication)
@@ -111,10 +113,12 @@ The server supports three operational modes via the `MODE` environment variable:
   - HTTP server port
 
 **v2.0 Configuration Variables:**
+
 - `MODE`: Server mode (`both`, `http`, `stdio`) - default: `both`
 - `PORT`: HTTP server port (default: `3000`, use `0` for auto-assign)
 
 **Removed from v1.x:**
+
 - ❌ `DEFAULT_SEARCH_ENGINE` - Use `engines` parameter in search tool
 - ❌ `ALLOWED_SEARCH_ENGINES` - All engines always available
 - ❌ `USE_PROXY` / `PROXY_URL` - Proxy support removed
@@ -128,6 +132,7 @@ The server supports three operational modes via the `MODE` environment variable:
   - Implements error handling for CAPTCHA detection and network failures
 
 **Removed from v1.x:**
+
 - ❌ `fetchLinuxDoArticle` - Article fetching removed
 - ❌ `fetchCsdnArticle` - Article fetching removed
 - ❌ `fetchGithubReadme` - Article fetching removed
@@ -138,10 +143,12 @@ The server supports three operational modes via the `MODE` environment variable:
 **Class-based pattern using BaseEngine:**
 
 Each search engine extends the `BaseEngine` abstract class and implements two methods:
+
 1. **`buildSearchUrl(query: string): string`** - Constructs the search URL
 2. **`extractResults(page: Page, limit: number): Promise<SearchResult[]>`** - Extracts results from page
 
 All engines are in `src/engines/` directory (flat structure, not nested):
+
 - **`BaseEngine.ts`**: Abstract base class with template method pattern
 - **`bing.ts`**: Bing implementation (~40 lines)
 - **`duckduckgo.ts`**: DuckDuckGo implementation
@@ -149,34 +156,40 @@ All engines are in `src/engines/` directory (flat structure, not nested):
 - **`google.ts`**: Google implementation (includes CAPTCHA detection)
 
 **Engine Implementation Pattern:**
+
 ```typescript
-import { Page } from 'playwright';
-import { BaseEngine } from './BaseEngine.js';
-import { SearchResult } from '../types.js';
+import { Page } from "playwright";
+import { BaseEngine } from "./BaseEngine.js";
+import { SearchResult } from "../types.js";
 
 export class ExampleEngine extends BaseEngine {
-    readonly name = 'example';
-    readonly baseUrl = 'https://example.com';
+  readonly name = "example";
+  readonly baseUrl = "https://example.com";
 
-    protected buildSearchUrl(query: string): string {
-        return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
-    }
+  protected buildSearchUrl(query: string): string {
+    return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
+  }
 
-    protected async extractResults(page: Page, limit: number): Promise<SearchResult[]> {
-        await page.waitForSelector('.result', { timeout: 10000 });
+  protected async extractResults(
+    page: Page,
+    limit: number,
+  ): Promise<SearchResult[]> {
+    await page.waitForSelector(".result", { timeout: 10000 });
 
-        const results = await page.$$eval('.result', (elements) => {
-            return elements.map(el => ({
-                title: el.querySelector('.title')?.textContent?.trim() || '',
-                url: el.querySelector('a')?.getAttribute('href') || '',
-                description: el.querySelector('.desc')?.textContent?.trim() || '',
-                source: el.querySelector('.source')?.textContent?.trim() || '',
-                engine: 'example'
-            })).filter(r => r.url.startsWith('http'));
-        });
+    const results = await page.$$eval(".result", (elements) => {
+      return elements
+        .map((el) => ({
+          title: el.querySelector(".title")?.textContent?.trim() || "",
+          url: el.querySelector("a")?.getAttribute("href") || "",
+          description: el.querySelector(".desc")?.textContent?.trim() || "",
+          source: el.querySelector(".source")?.textContent?.trim() || "",
+          engine: "example",
+        }))
+        .filter((r) => r.url.startsWith("http"));
+    });
 
-        return results.slice(0, limit);
-    }
+    return results.slice(0, limit);
+  }
 }
 
 // Export singleton instance
@@ -184,6 +197,7 @@ export const exampleEngine = new ExampleEngine();
 ```
 
 **Key Features:**
+
 - Playwright page automation for browser-like behavior
 - Stealth configuration applied automatically (via `BaseEngine.search()`)
 - Browser pool management handles page lifecycle
@@ -217,9 +231,9 @@ export const exampleEngine = new ExampleEngine();
       title: string;
       url: string;
       description: string;
-      source: string;        // Domain name
-      engine: string;        // Engine that produced this result
-      publishDate?: string;  // ISO 8601 format
+      source: string; // Domain name
+      engine: string; // Engine that produced this result
+      publishDate?: string; // ISO 8601 format
       author?: string;
       language?: string;
     }
@@ -239,6 +253,7 @@ export const exampleEngine = new ExampleEngine();
 ### HTTP Server Architecture
 
 HTTP server implementation is split across:
+
 - **`src/server.ts`**: Server creation and configuration (exported for testing)
   - `createMcpServer()`: Creates and configures MCP server with tools
   - `createHttpServer()`: Creates HTTP server with transport handlers
@@ -246,6 +261,7 @@ HTTP server implementation is split across:
 - **`src/index.ts`**: Main entry point that uses server.ts exports
 
 When HTTP mode is enabled:
+
 - Uses Node.js `http.createServer()` from `node:http` module
   - Fully compatible with Bun runtime (Bun implements node:http natively)
   - No Express dependency - uses native Node.js HTTP APIs
@@ -268,36 +284,43 @@ When HTTP mode is enabled:
 1. **Create engine file:** `src/engines/[engine-name].ts`
 
 2. **Implement class extending BaseEngine:**
+
    ```typescript
-   import { Page } from 'playwright';
-   import { BaseEngine } from './BaseEngine.js';
-   import { SearchResult } from '../types.js';
+   import { Page } from "playwright";
+   import { BaseEngine } from "./BaseEngine.js";
+   import { SearchResult } from "../types.js";
 
    export class YourEngine extends BaseEngine {
-       readonly name = 'yourengine';
-       readonly baseUrl = 'https://yourengine.com';
+     readonly name = "yourengine";
+     readonly baseUrl = "https://yourengine.com";
 
-       protected buildSearchUrl(query: string): string {
-           return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
-       }
+     protected buildSearchUrl(query: string): string {
+       return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
+     }
 
-       protected async extractResults(page: Page, limit: number): Promise<SearchResult[]> {
-           // Wait for results to load
-           await page.waitForSelector('.result-selector', { timeout: 10000 });
+     protected async extractResults(
+       page: Page,
+       limit: number,
+     ): Promise<SearchResult[]> {
+       // Wait for results to load
+       await page.waitForSelector(".result-selector", { timeout: 10000 });
 
-           // Extract results using page.$$eval
-           const results = await page.$$eval('.result-selector', (elements) => {
-               return elements.map(el => ({
-                   title: el.querySelector('.title')?.textContent?.trim() || '',
-                   url: el.querySelector('a')?.getAttribute('href') || '',
-                   description: el.querySelector('.description')?.textContent?.trim() || '',
-                   source: el.querySelector('.source')?.textContent?.trim() || '',
-                   engine: 'yourengine'
-               })).filter(result => result.url.startsWith('http'));
-           });
+       // Extract results using page.$$eval
+       const results = await page.$$eval(".result-selector", (elements) => {
+         return elements
+           .map((el) => ({
+             title: el.querySelector(".title")?.textContent?.trim() || "",
+             url: el.querySelector("a")?.getAttribute("href") || "",
+             description:
+               el.querySelector(".description")?.textContent?.trim() || "",
+             source: el.querySelector(".source")?.textContent?.trim() || "",
+             engine: "yourengine",
+           }))
+           .filter((result) => result.url.startsWith("http"));
+       });
 
-           return results.slice(0, limit);
-       }
+       return results.slice(0, limit);
+     }
    }
 
    // Export singleton instance
@@ -309,13 +332,15 @@ When HTTP mode is enabled:
    - Add to `engineMap`:
      ```typescript
      const engineMap = {
-         // ... existing engines
-         yourengine: yourEngine,
+       // ... existing engines
+       yourengine: yourEngine,
      };
      ```
    - Update Zod schema to include new engine:
      ```typescript
-     engines: z.array(z.enum(['bing', 'duckduckgo', 'brave', 'google', 'yourengine']))
+     engines: z.array(
+       z.enum(["bing", "duckduckgo", "brave", "google", "yourengine"]),
+     );
      ```
 
 4. **Create tests:**
@@ -339,6 +364,7 @@ Use browser DevTools to find CSS selectors:
 6. Test selectors in console: `document.querySelectorAll('.your-selector')`
 
 **Tips:**
+
 - Prefer class selectors over IDs (more stable)
 - Avoid overly specific selectors (brittle)
 - Test selectors with multiple queries
@@ -378,6 +404,7 @@ src/__tests__/
 Unit tests verify individual components in isolation:
 
 **What to test:**
+
 - Engine URL building (buildSearchUrl)
 - Engine configuration (name, baseUrl)
 - Interface compliance (methods exist)
@@ -385,24 +412,25 @@ Unit tests verify individual components in isolation:
 - Stealth configuration
 
 **Example:**
+
 ```typescript
-import { describe, test, expect } from 'bun:test';
-import { yourEngine } from '../../engines/yourengine.js';
+import { describe, test, expect } from "bun:test";
+import { yourEngine } from "../../engines/yourengine.js";
 
-describe('YourEngine', () => {
-    test('has correct name', () => {
-        expect(yourEngine.name).toBe('yourengine');
-    });
+describe("YourEngine", () => {
+  test("has correct name", () => {
+    expect(yourEngine.name).toBe("yourengine");
+  });
 
-    test('builds correct search URL', () => {
-        const url = (yourEngine as any).buildSearchUrl('test query');
-        expect(url).toBe('https://yourengine.com/search?q=test%20query');
-    });
+  test("builds correct search URL", () => {
+    const url = (yourEngine as any).buildSearchUrl("test query");
+    expect(url).toBe("https://yourengine.com/search?q=test%20query");
+  });
 
-    test('implements SearchEngine interface', () => {
-        expect(typeof yourEngine.search).toBe('function');
-        expect(typeof yourEngine.healthCheck).toBe('function');
-    });
+  test("implements SearchEngine interface", () => {
+    expect(typeof yourEngine.search).toBe("function");
+    expect(typeof yourEngine.healthCheck).toBe("function");
+  });
 });
 ```
 
@@ -411,6 +439,7 @@ describe('YourEngine', () => {
 Integration tests verify MCP server and HTTP server functionality:
 
 **What to test:**
+
 - Tool registration
 - Search tool execution
 - Multi-engine search
@@ -424,6 +453,7 @@ Integration tests verify MCP server and HTTP server functionality:
 E2E tests make real network requests to search engines:
 
 **What to test:**
+
 - Real search queries return results
 - Result structure is correct
 - Multi-engine searches work
@@ -437,6 +467,7 @@ E2E tests make real network requests to search engines:
 Performance tests establish benchmarks:
 
 **Benchmarks:**
+
 - Cold start search: <4 seconds
 - Warm search: <2 seconds
 - Concurrent searches (5): <15 seconds
@@ -446,17 +477,20 @@ Performance tests establish benchmarks:
 
 **IMPORTANT:** After making any code changes:
 
-1. **Type check:** Run `bun run typecheck` to ensure TypeScript strict mode compliance
-2. **Test:** Run `bun test` (or fast suite: `bun test src/__tests__/unit src/__tests__/integration`)
-3. **Manual test:** Use `bun inspector` to test MCP tool manually if needed
+1. **Format:** Run `bunx prettier --write .` to format all files (or `bun run format`)
+2. **Type check:** Run `bun run typecheck` to ensure TypeScript strict mode compliance
+3. **Test:** Run `bun test` (or fast suite: `bun test src/__tests__/unit src/__tests__/integration`)
+4. **Manual test:** Use `bun inspector` to test MCP tool manually if needed
 
 The project MUST maintain:
+
 - ✅ Zero TypeScript errors in strict mode (`strict: true` in tsconfig.json)
 - ✅ Zero `any` types in source code (use `unknown`, proper interfaces, or type guards)
 - ✅ Zero TypeScript suppressions (`@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`)
 - ✅ All unit and integration tests passing
 
 **Type Safety Guidelines:**
+
 - Use proper interfaces for Page, Browser, BrowserContext from Playwright
 - Use `SearchResult` type for all search results
 - Use `unknown` for JSON parsing results, not `any`
@@ -506,21 +540,25 @@ The project MUST maintain:
 ### Common Issues
 
 **"Playwright browser not found"**
+
 ```bash
 bunx playwright install chromium
 ```
 
 **"Tests timing out"**
+
 - Increase timeout in test: `{ timeout: 15000 }`
 - Check internet connection
 - Try different search engine
 
 **"Google CAPTCHA detected"**
+
 - This is expected behavior
 - Use Bing, DuckDuckGo, or Brave instead
 - Google search is marked experimental for this reason
 
 **"TypeScript errors"**
+
 ```bash
 # Check for errors
 bun run typecheck
@@ -538,6 +576,7 @@ bun run typecheck
 v2.0 is a complete rewrite with breaking changes. See [Migration Guide](docs/migration-v1-to-v2.md) for details.
 
 **Key architectural changes:**
+
 - axios/cheerio → Playwright browser automation
 - Flat structure → Class-based BaseEngine pattern
 - 9 engines → 4 engines (focus on quality)

@@ -4,7 +4,7 @@ name: Build and Push to GHCR & ACR
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -78,7 +78,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64  # Multi-platform support
+          platforms: linux/amd64,linux/arm64 # Multi-platform support
           push: true
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha

@@ -24,12 +24,14 @@ Multi-engine web search MCP server using Playwright browser automation - zero AP
 ### Major Changes
 
 **Removed Features:**
+
 - ❌ **Docker support** - Local-first design, use `bunx` instead
 - ❌ **Article fetchers** - Use [markitdown MCP](https://github.com/microsoft/markitdown) instead
 - ❌ **HTTP proxy support** - May return in v2.1+ based on demand
 - ❌ **5 search engines** removed - baidu, csdn, linuxdo, juejin, zhihu (focus on quality over quantity)
 
 **New Features:**
+
 - ✅ **Google search support** - With CAPTCHA detection and error handling
 - ✅ **Playwright browser automation** - Built-in stealth mode for better bot evasion
 - ✅ **Class-based architecture** - `BaseEngine` pattern makes adding engines easy (<30 min, <50 lines)
@@ -37,6 +39,7 @@ Multi-engine web search MCP server using Playwright browser automation - zero AP
 - ✅ **Simplified configuration** - Only 2 env vars needed (PORT, MODE)
 
 **Changed:**
+
 - 🔄 Search implementation: axios/cheerio → Playwright
 - 🔄 Project structure: nested → flat
 - 🔄 Engine count: 9 → 4 (bing, duckduckgo, brave, google)
@@ -79,10 +82,12 @@ Multi-engine web search MCP server using Playwright browser automation - zero AP
 ### Prerequisites
 
 **Required:**
+
 - [Bun](https://bun.sh) runtime (v1.0+)
 - Playwright Chromium browser
 
 **Install Playwright browsers (one-time setup):**
+
 ```bash
 bunx playwright install chromium
 ```
@@ -107,22 +112,26 @@ $env:MODE="http"; $env:PORT="3000"; bunx github:evanlouie/open-websearch
 ### Local Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/evanlouie/open-websearch.git
 cd open-websearch
 ```
 
 2. Install dependencies:
+
 ```bash
 bun install
 ```
 
 3. Install Playwright browsers:
+
 ```bash
 bunx playwright install chromium
 ```
 
 4. Run the server:
+
 ```bash
 # STDIO mode (for MCP clients)
 bun start
@@ -140,12 +149,13 @@ MODE=both bun start
 
 ### Environment Variables
 
-| Variable | Default | Options | Description |
-|----------|---------|---------|-------------|
-| `MODE` | `both` | `stdio`, `http`, `both` | Server transport mode |
-| `PORT` | `3000` | 0-65535 | HTTP server port (0 = auto-assign) |
+| Variable | Default | Options                 | Description                        |
+| -------- | ------- | ----------------------- | ---------------------------------- |
+| `MODE`   | `both`  | `stdio`, `http`, `both` | Server transport mode              |
+| `PORT`   | `3000`  | 0-65535                 | HTTP server port (0 = auto-assign) |
 
 **v2.0 removed variables:**
+
 - ❌ `DEFAULT_SEARCH_ENGINE` - Use `engines` parameter in search tool
 - ❌ `ALLOWED_SEARCH_ENGINES` - All engines always available
 - ❌ `USE_PROXY` / `PROXY_URL` - Proxy support removed
@@ -154,6 +164,7 @@ MODE=both bun start
 ### Browser Configuration
 
 Browser settings are hard-coded for simplicity (may be configurable in v2.1+):
+
 - **Mode:** `shared` (single browser page reused across searches)
 - **Headless:** `true`
 - **Timeout:** 30 seconds
@@ -184,6 +195,7 @@ Add to `claude_desktop_config.json`:
 ### Cherry Studio
 
 **STDIO Configuration:**
+
 ```json
 {
   "mcpServers": {
@@ -199,6 +211,7 @@ Add to `claude_desktop_config.json`:
 ```
 
 **HTTP Configuration (StreamableHTTP):**
+
 ```json
 {
   "mcpServers": {
@@ -229,6 +242,7 @@ Add to `claude_desktop_config.json`:
 ```
 
 **Local Development (Windows):**
+
 ```json
 {
   "mcpServers": {
@@ -252,6 +266,7 @@ Add to `claude_desktop_config.json`:
 The server provides a single `search` tool for multi-engine web search.
 
 **Parameters:**
+
 ```typescript
 {
   "query": string,        // Search query (required)
@@ -261,12 +276,14 @@ The server provides a single `search` tool for multi-engine web search.
 ```
 
 **Available engines:**
+
 - `"bing"` - Bing search (recommended, most reliable)
 - `"duckduckgo"` - DuckDuckGo search
 - `"brave"` - Brave search
 - `"google"` - Google search (experimental, may hit CAPTCHA)
 
 **Example: Single Engine**
+
 ```typescript
 use_mcp_tool({
   server_name: "web-search",
@@ -274,12 +291,13 @@ use_mcp_tool({
   arguments: {
     query: "playwright web scraping",
     limit: 10,
-    engines: ["bing"]
-  }
-})
+    engines: ["bing"],
+  },
+});
 ```
 
 **Example: Multiple Engines**
+
 ```typescript
 use_mcp_tool({
   server_name: "web-search",
@@ -287,12 +305,13 @@ use_mcp_tool({
   arguments: {
     query: "best web scraping libraries",
     limit: 15,
-    engines: ["bing", "duckduckgo", "brave"]
-  }
-})
+    engines: ["bing", "duckduckgo", "brave"],
+  },
+});
 ```
 
 **Response Format:**
+
 ```json
 {
   "query": "playwright web scraping",
@@ -313,6 +332,7 @@ use_mcp_tool({
 ### Error Handling
 
 **Google CAPTCHA Detection:**
+
 ```json
 {
   "error": "Google search blocked by CAPTCHA. Try using bing, duckduckgo, or brave instead."
@@ -320,6 +340,7 @@ use_mcp_tool({
 ```
 
 **Network Errors:**
+
 ```json
 {
   "error": "Search failed: Timeout waiting for search results"
@@ -332,14 +353,15 @@ use_mcp_tool({
 
 Based on benchmarks from 103 automated tests:
 
-| Metric | Target | Typical |
-|--------|--------|---------|
-| **Cold Start** | <4s | ~3.2s |
-| **Warm Search** | <2s | ~1.5s |
-| **Concurrent (5)** | <15s | ~12s |
-| **Browser Init** | <3s | ~2.1s |
+| Metric             | Target | Typical |
+| ------------------ | ------ | ------- |
+| **Cold Start**     | <4s    | ~3.2s   |
+| **Warm Search**    | <2s    | ~1.5s   |
+| **Concurrent (5)** | <15s   | ~12s    |
+| **Browser Init**   | <3s    | ~2.1s   |
 
 **Performance Tips:**
+
 - First search is slower (browser initialization)
 - Subsequent searches reuse browser (much faster)
 - Concurrent searches handled via browser pooling
@@ -379,6 +401,7 @@ bun inspector
 See [Adding Engines Guide](docs/adding-engines.md) for step-by-step instructions.
 
 **Quick Overview:**
+
 1. Create `src/engines/example.ts`
 2. Extend `BaseEngine` class
 3. Implement `buildSearchUrl()` and `extractResults()`
@@ -389,29 +412,35 @@ See [Adding Engines Guide](docs/adding-engines.md) for step-by-step instructions
 **Code estimate:** <50 lines
 
 **Example:**
+
 ```typescript
-import { Page } from 'playwright';
-import { BaseEngine } from './BaseEngine.js';
-import { SearchResult } from '../types.js';
+import { Page } from "playwright";
+import { BaseEngine } from "./BaseEngine.js";
+import { SearchResult } from "../types.js";
 
 export class ExampleEngine extends BaseEngine {
-  readonly name = 'example';
-  readonly baseUrl = 'https://example.com';
+  readonly name = "example";
+  readonly baseUrl = "https://example.com";
 
   protected buildSearchUrl(query: string): string {
     return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
   }
 
-  protected async extractResults(page: Page, limit: number): Promise<SearchResult[]> {
-    await page.waitForSelector('.result');
-    const results = await page.$$eval('.result', (elements) => {
-      return elements.map(el => ({
-        title: el.querySelector('.title')?.textContent?.trim() || '',
-        url: el.querySelector('a')?.getAttribute('href') || '',
-        description: el.querySelector('.desc')?.textContent?.trim() || '',
-        source: el.querySelector('.source')?.textContent?.trim() || '',
-        engine: 'example'
-      })).filter(r => r.url.startsWith('http'));
+  protected async extractResults(
+    page: Page,
+    limit: number,
+  ): Promise<SearchResult[]> {
+    await page.waitForSelector(".result");
+    const results = await page.$$eval(".result", (elements) => {
+      return elements
+        .map((el) => ({
+          title: el.querySelector(".title")?.textContent?.trim() || "",
+          url: el.querySelector("a")?.getAttribute("href") || "",
+          description: el.querySelector(".desc")?.textContent?.trim() || "",
+          source: el.querySelector(".source")?.textContent?.trim() || "",
+          engine: "example",
+        }))
+        .filter((r) => r.url.startsWith("http"));
     });
     return results.slice(0, limit);
   }
@@ -449,6 +478,7 @@ src/
 ### Development Requirements
 
 All code must maintain:
+
 - ✅ Zero TypeScript errors in strict mode (`bun run typecheck`)
 - ✅ All tests passing (`bun test`)
 - ✅ No `any` types in source code
@@ -474,6 +504,7 @@ bunx playwright install chromium
 ### "Google CAPTCHA detected"
 
 Google aggressively blocks automated requests. Solutions:
+
 - Use `bing`, `duckduckgo`, or `brave` instead (recommended)
 - Google search is marked experimental for this reason
 
@@ -497,6 +528,7 @@ bun test:performance
 Contributions welcome! See [Adding Engines Guide](docs/adding-engines.md) for details.
 
 **Development workflow:**
+
 1. Fork the repository
 2. Create a feature branch
 3. Make changes (maintain TypeScript strict mode)
@@ -504,6 +536,7 @@ Contributions welcome! See [Adding Engines Guide](docs/adding-engines.md) for de
 5. Submit a pull request
 
 **Areas for contribution:**
+
 - Additional search engines (Yahoo, Startpage, Ecosia)
 - Improved stealth techniques
 - Performance optimizations
@@ -541,6 +574,7 @@ Since this tool uses browser automation for scraping:
 See [Migration Guide](docs/migration-v1-to-v2.md) for detailed instructions.
 
 **Quick summary:**
+
 - **Docker users:** Switch to `bunx github:evanlouie/open-websearch`
 - **Article fetcher users:** Use [markitdown MCP](https://github.com/microsoft/markitdown)
 - **Proxy users:** Stay on v1.x or contribute proxy support to v2.x

@@ -19,6 +19,8 @@
     "test:performance": "bun test src/__tests__/performance",
     "test:watch": "bun test --watch",
     "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "inspector": "bunx @modelcontextprotocol/inspector src/index.ts",
     "mode:stdio": "MODE=stdio bun src/index.ts",
     "mode:http": "MODE=http bun src/index.ts",

@@ -56,35 +56,40 @@ Here's a complete search engine implementation in ~40 lines:
 
 ```typescript
 // src/engines/example.ts
-import { Page } from 'playwright';
-import { BaseEngine } from './BaseEngine.js';
-import { SearchResult } from '../types.js';
+import { Page } from "playwright";
+import { BaseEngine } from "./BaseEngine.js";
+import { SearchResult } from "../types.js";
 
 export class ExampleEngine extends BaseEngine {
-    readonly name = 'example';
-    readonly baseUrl = 'https://example.com';
+  readonly name = "example";
+  readonly baseUrl = "https://example.com";
 
-    protected buildSearchUrl(query: string): string {
-        return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
-    }
+  protected buildSearchUrl(query: string): string {
+    return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
+  }
 
-    protected async extractResults(page: Page, limit: number): Promise<SearchResult[]> {
-        // Wait for search results to load
-        await page.waitForSelector('.result', { timeout: 10000 });
+  protected async extractResults(
+    page: Page,
+    limit: number,
+  ): Promise<SearchResult[]> {
+    // Wait for search results to load
+    await page.waitForSelector(".result", { timeout: 10000 });
 
-        // Extract results from page
-        const results = await page.$$eval('.result', (elements) => {
-            return elements.map(el => ({
-                title: el.querySelector('.title')?.textContent?.trim() || '',
-                url: el.querySelector('a')?.getAttribute('href') || '',
-                description: el.querySelector('.desc')?.textContent?.trim() || '',
-                source: el.querySelector('.source')?.textContent?.trim() || '',
-                engine: 'example'
-            })).filter(result => result.url.startsWith('http'));
-        });
+    // Extract results from page
+    const results = await page.$$eval(".result", (elements) => {
+      return elements
+        .map((el) => ({
+          title: el.querySelector(".title")?.textContent?.trim() || "",
+          url: el.querySelector("a")?.getAttribute("href") || "",
+          description: el.querySelector(".desc")?.textContent?.trim() || "",
+          source: el.querySelector(".source")?.textContent?.trim() || "",
+          engine: "example",
+        }))
+        .filter((result) => result.url.startsWith("http"));
+    });
 
-        return results.slice(0, limit);
-    }
+    return results.slice(0, limit);
+  }
 }
 
 // Export singleton instance
@@ -110,53 +115,58 @@ touch src/engines/yourengine.ts
 Copy this template and fill in the TODOs:
 
 ```typescript
-import { Page } from 'playwright';
-import { BaseEngine } from './BaseEngine.js';
-import { SearchResult } from '../types.js';
+import { Page } from "playwright";
+import { BaseEngine } from "./BaseEngine.js";
+import { SearchResult } from "../types.js";
 
 export class YourEngine extends BaseEngine {
-    // TODO: Change 'yourengine' to your engine name (lowercase, no spaces)
-    readonly name = 'yourengine';
+  // TODO: Change 'yourengine' to your engine name (lowercase, no spaces)
+  readonly name = "yourengine";
 
-    // TODO: Change to your engine's homepage URL
-    readonly baseUrl = 'https://yourengine.com';
+  // TODO: Change to your engine's homepage URL
+  readonly baseUrl = "https://yourengine.com";
 
-    protected buildSearchUrl(query: string): string {
-        // TODO: Construct search URL with query parameter
-        // Examples:
-        // - https://yourengine.com/search?q={query}
-        // - https://yourengine.com/?query={query}
-        // - https://yourengine.com/s?q={query}&lang=en
+  protected buildSearchUrl(query: string): string {
+    // TODO: Construct search URL with query parameter
+    // Examples:
+    // - https://yourengine.com/search?q={query}
+    // - https://yourengine.com/?query={query}
+    // - https://yourengine.com/s?q={query}&lang=en
 
-        return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
-    }
+    return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
+  }
 
-    protected async extractResults(page: Page, limit: number): Promise<SearchResult[]> {
-        // TODO: Wait for results to load
-        // Find the CSS selector for search result containers
-        await page.waitForSelector('.result-selector', { timeout: 10000 });
+  protected async extractResults(
+    page: Page,
+    limit: number,
+  ): Promise<SearchResult[]> {
+    // TODO: Wait for results to load
+    // Find the CSS selector for search result containers
+    await page.waitForSelector(".result-selector", { timeout: 10000 });
 
-        // TODO: Extract search results
-        const results = await page.$$eval('.result-selector', (elements) => {
-            return elements.map(el => {
-                // TODO: Find CSS selectors for each field
-                const titleEl = el.querySelector('.title-selector');
-                const linkEl = el.querySelector('a.link-selector');
-                const descEl = el.querySelector('.description-selector');
-                const sourceEl = el.querySelector('.source-selector');
+    // TODO: Extract search results
+    const results = await page.$$eval(".result-selector", (elements) => {
+      return elements
+        .map((el) => {
+          // TODO: Find CSS selectors for each field
+          const titleEl = el.querySelector(".title-selector");
+          const linkEl = el.querySelector("a.link-selector");
+          const descEl = el.querySelector(".description-selector");
+          const sourceEl = el.querySelector(".source-selector");
 
-                return {
-                    title: titleEl?.textContent?.trim() || '',
-                    url: linkEl?.getAttribute('href') || '',
-                    description: descEl?.textContent?.trim() || '',
-                    source: sourceEl?.textContent?.trim() || '',
-                    engine: 'yourengine'  // TODO: Match this with name above
-                };
-            }).filter(result => result.url.startsWith('http'));
-        });
+          return {
+            title: titleEl?.textContent?.trim() || "",
+            url: linkEl?.getAttribute("href") || "",
+            description: descEl?.textContent?.trim() || "",
+            source: sourceEl?.textContent?.trim() || "",
+            engine: "yourengine", // TODO: Match this with name above
+          };
+        })
+        .filter((result) => result.url.startsWith("http"));
+    });
 
-        return results.slice(0, limit);
-    }
+    return results.slice(0, limit);
+  }
 }
 
 // Export singleton instance
@@ -182,25 +192,27 @@ Edit `src/tools/setupTools.ts`:
 
 ```typescript
 // 1. Add import at top
-import { yourEngine } from '../engines/yourengine.js';
+import { yourEngine } from "../engines/yourengine.js";
 
 // 2. Add to engineMap (around line 15)
 const engineMap = {
-    bing: bingEngine,
-    duckduckgo: duckduckgoEngine,
-    brave: braveEngine,
-    google: googleEngine,
-    yourengine: yourEngine,  // ADD THIS
+  bing: bingEngine,
+  duckduckgo: duckduckgoEngine,
+  brave: braveEngine,
+  google: googleEngine,
+  yourengine: yourEngine, // ADD THIS
 };
 
 // 3. Update Zod schema (around line 25)
-engines: z.array(z.enum([
-    'bing',
-    'duckduckgo',
-    'brave',
-    'google',
-    'yourengine'  // ADD THIS
-])).default(['bing'])
+engines: z.array(
+  z.enum([
+    "bing",
+    "duckduckgo",
+    "brave",
+    "google",
+    "yourengine", // ADD THIS
+  ]),
+).default(["bing"]);
 ```
 
 ### Step 5: Create Unit Tests
@@ -208,48 +220,48 @@ engines: z.array(z.enum([
 Create `src/__tests__/unit/engines/yourengine.test.ts`:
 
 ```typescript
-import { describe, test, expect } from 'bun:test';
-import { yourEngine } from '../../../engines/yourengine.js';
+import { describe, test, expect } from "bun:test";
+import { yourEngine } from "../../../engines/yourengine.js";
 
-describe('YourEngine', () => {
-    describe('Configuration', () => {
-        test('has correct name', () => {
-            expect(yourEngine.name).toBe('yourengine');
-        });
-
-        test('has correct baseUrl', () => {
-            expect(yourEngine.baseUrl).toBe('https://yourengine.com');
-        });
+describe("YourEngine", () => {
+  describe("Configuration", () => {
+    test("has correct name", () => {
+      expect(yourEngine.name).toBe("yourengine");
     });
 
-    describe('buildSearchUrl', () => {
-        test('builds correct search URL', () => {
-            const url = (yourEngine as any).buildSearchUrl('test query');
-            expect(url).toBe('https://yourengine.com/search?q=test%20query');
-        });
+    test("has correct baseUrl", () => {
+      expect(yourEngine.baseUrl).toBe("https://yourengine.com");
+    });
+  });
 
-        test('encodes special characters', () => {
-            const url = (yourEngine as any).buildSearchUrl('search & find!');
-            expect(url).toContain(encodeURIComponent('search & find!'));
-        });
-
-        test('handles empty query', () => {
-            const url = (yourEngine as any).buildSearchUrl('');
-            expect(url).toBe('https://yourengine.com/search?q=');
-        });
+  describe("buildSearchUrl", () => {
+    test("builds correct search URL", () => {
+      const url = (yourEngine as any).buildSearchUrl("test query");
+      expect(url).toBe("https://yourengine.com/search?q=test%20query");
     });
 
-    describe('Interface Compliance', () => {
-        test('implements all SearchEngine methods', () => {
-            expect(typeof yourEngine.search).toBe('function');
-            expect(typeof yourEngine.healthCheck).toBe('function');
-        });
-
-        test('has required properties', () => {
-            expect(typeof yourEngine.name).toBe('string');
-            expect(typeof yourEngine.baseUrl).toBe('string');
-        });
+    test("encodes special characters", () => {
+      const url = (yourEngine as any).buildSearchUrl("search & find!");
+      expect(url).toContain(encodeURIComponent("search & find!"));
     });
+
+    test("handles empty query", () => {
+      const url = (yourEngine as any).buildSearchUrl("");
+      expect(url).toBe("https://yourengine.com/search?q=");
+    });
+  });
+
+  describe("Interface Compliance", () => {
+    test("implements all SearchEngine methods", () => {
+      expect(typeof yourEngine.search).toBe("function");
+      expect(typeof yourEngine.healthCheck).toBe("function");
+    });
+
+    test("has required properties", () => {
+      expect(typeof yourEngine.name).toBe("string");
+      expect(typeof yourEngine.baseUrl).toBe("string");
+    });
+  });
 });
 ```
 
@@ -258,25 +270,33 @@ describe('YourEngine', () => {
 Edit `src/__tests__/e2e/search.test.ts` and add:
 
 ```typescript
-describe('YourEngine Search', () => {
-    test('search for "test" returns relevant results', async () => {
-        const results = await yourEngine.search('test', 10);
+describe("YourEngine Search", () => {
+  test(
+    'search for "test" returns relevant results',
+    async () => {
+      const results = await yourEngine.search("test", 10);
 
-        expect(results).toBeDefined();
-        expect(Array.isArray(results)).toBe(true);
-        expect(results.length).toBeGreaterThan(0);
-        expect(results.length).toBeLessThanOrEqual(10);
+      expect(results).toBeDefined();
+      expect(Array.isArray(results)).toBe(true);
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.length).toBeLessThanOrEqual(10);
 
-        // Verify result structure
-        const firstResult = results[0];
-        expect(firstResult.engine).toBe('yourengine');
-        expect(firstResult.url).toMatch(/^https?:\/\//);
-    }, { timeout: 30000 });
+      // Verify result structure
+      const firstResult = results[0];
+      expect(firstResult.engine).toBe("yourengine");
+      expect(firstResult.url).toMatch(/^https?:\/\//);
+    },
+    { timeout: 30000 },
+  );
 
-    test('healthCheck returns true', async () => {
-        const isHealthy = await yourEngine.healthCheck();
-        expect(isHealthy).toBe(true);
-    }, { timeout: 15000 });
+  test(
+    "healthCheck returns true",
+    async () => {
+      const isHealthy = await yourEngine.healthCheck();
+      expect(isHealthy).toBe(true);
+    },
+    { timeout: 15000 },
+  );
 });
 ```
 
@@ -313,6 +333,7 @@ bun inspector
 ### Step 9: Update Documentation
 
 1. **README.md:** Add your engine to the features list
+
    ```markdown
    - **4 High-Quality Search Engines**
      - **Bing** - Reliable, fast, best overall
@@ -335,6 +356,7 @@ bun inspector
 **Step-by-step:**
 
 1. **Open the search engine** in Chrome/Edge/Firefox
+
    ```
    https://yourengine.com
    ```
@@ -364,29 +386,31 @@ bun inspector
    - Source: Usually `.source`, `.domain`, `cite`
 
 7. **Test selectors in Console**
+
    ```javascript
    // Test container selector
-   document.querySelectorAll('.result')
+   document.querySelectorAll(".result");
 
    // Should return array of result elements
    // Try variations if it doesn't work:
-   document.querySelectorAll('.search-result')
-   document.querySelectorAll('[class*="result"]')
+   document.querySelectorAll(".search-result");
+   document.querySelectorAll('[class*="result"]');
    ```
 
 8. **Test field selectors**
+
    ```javascript
    // Get first result
-   const firstResult = document.querySelector('.result');
+   const firstResult = document.querySelector(".result");
 
    // Test title selector
-   firstResult.querySelector('.title')?.textContent
+   firstResult.querySelector(".title")?.textContent;
 
    // Test link selector
-   firstResult.querySelector('a')?.getAttribute('href')
+   firstResult.querySelector("a")?.getAttribute("href");
 
    // Test description
-   firstResult.querySelector('.description')?.textContent
+   firstResult.querySelector(".description")?.textContent;
    ```
 
 ### Method 2: Playwright Inspector
@@ -397,28 +421,31 @@ PWDEBUG=1 bun run src/__tests__/e2e/search.test.ts
 ```
 
 This opens Playwright Inspector where you can:
+
 - Step through your test
 - Inspect elements interactively
 - Test selectors in real-time
 
 ### Common Selector Patterns
 
-| Element | Common Selectors |
-|---------|------------------|
+| Element              | Common Selectors                                                           |
+| -------------------- | -------------------------------------------------------------------------- |
 | **Result Container** | `.result`, `.search-result`, `article`, `.organic-result`, `[data-result]` |
-| **Title** | `h2`, `h3`, `.title`, `.result-title`, `.entry-title` |
-| **Link** | `a`, `.result-link`, `a.title-link` |
-| **Description** | `.description`, `.snippet`, `.excerpt`, `p`, `.result-description` |
-| **Source** | `.source`, `.domain`, `cite`, `.url`, `.site` |
+| **Title**            | `h2`, `h3`, `.title`, `.result-title`, `.entry-title`                      |
+| **Link**             | `a`, `.result-link`, `a.title-link`                                        |
+| **Description**      | `.description`, `.snippet`, `.excerpt`, `p`, `.result-description`         |
+| **Source**           | `.source`, `.domain`, `cite`, `.url`, `.site`                              |
 
 ### Selector Best Practices
 
 **✅ Good selectors:**
+
 - `.result` - Simple class selector
 - `[data-result="organic"]` - Data attribute
 - `.result h2` - Descendant selector
 
 **❌ Avoid:**
+
 - `#result-12345` - IDs are often dynamic
 - `div > div > div > div > h2` - Too specific, brittle
 - `.result.item.organic.web-result` - Too many classes
@@ -426,18 +453,19 @@ This opens Playwright Inspector where you can:
 ### Testing Selectors
 
 **Good test:**
+
 ```javascript
 // Should find multiple results
-const results = document.querySelectorAll('.result');
-console.log(results.length);  // Should be 10+
+const results = document.querySelectorAll(".result");
+console.log(results.length); // Should be 10+
 
 // Each result should have title, link, description
 results.forEach((result, i) => {
-    const title = result.querySelector('.title')?.textContent;
-    const url = result.querySelector('a')?.getAttribute('href');
-    const desc = result.querySelector('.description')?.textContent;
+  const title = result.querySelector(".title")?.textContent;
+  const url = result.querySelector("a")?.getAttribute("href");
+  const desc = result.querySelector(".description")?.textContent;
 
-    console.log(`Result ${i}:`, { title, url, desc });
+  console.log(`Result ${i}:`, { title, url, desc });
 });
 ```
 
@@ -603,23 +631,25 @@ protected async extractResults(page: Page, limit: number): Promise<SearchResult[
 Filter out relative URLs and non-HTTP links:
 
 ```typescript
-const results = await page.$$eval('.result', (elements) => {
-    return elements.map(el => {
-        let url = el.querySelector('a')?.getAttribute('href') || '';
+const results = await page.$$eval(".result", (elements) => {
+  return elements
+    .map((el) => {
+      let url = el.querySelector("a")?.getAttribute("href") || "";
 
-        // Convert relative URL to absolute
-        if (url.startsWith('/')) {
-            url = `https://yourengine.com${url}`;
-        }
+      // Convert relative URL to absolute
+      if (url.startsWith("/")) {
+        url = `https://yourengine.com${url}`;
+      }
 
-        return {
-            title: el.querySelector('.title')?.textContent?.trim() || '',
-            url: url,
-            description: el.querySelector('.desc')?.textContent?.trim() || '',
-            source: el.querySelector('.source')?.textContent?.trim() || '',
-            engine: 'yourengine'
-        };
-    }).filter(result => result.url.startsWith('http'));  // Only HTTP URLs
+      return {
+        title: el.querySelector(".title")?.textContent?.trim() || "",
+        url: url,
+        description: el.querySelector(".desc")?.textContent?.trim() || "",
+        source: el.querySelector(".source")?.textContent?.trim() || "",
+        engine: "yourengine",
+      };
+    })
+    .filter((result) => result.url.startsWith("http")); // Only HTTP URLs
 });
 ```
 
@@ -630,33 +660,38 @@ const results = await page.$$eval('.result', (elements) => {
 ### Example 1: Yahoo Search
 
 ```typescript
-import { Page } from 'playwright';
-import { BaseEngine } from './BaseEngine.js';
-import { SearchResult } from '../types.js';
+import { Page } from "playwright";
+import { BaseEngine } from "./BaseEngine.js";
+import { SearchResult } from "../types.js";
 
 export class YahooEngine extends BaseEngine {
-    readonly name = 'yahoo';
-    readonly baseUrl = 'https://search.yahoo.com';
+  readonly name = "yahoo";
+  readonly baseUrl = "https://search.yahoo.com";
 
-    protected buildSearchUrl(query: string): string {
-        return `${this.baseUrl}/search?p=${encodeURIComponent(query)}`;
-    }
+  protected buildSearchUrl(query: string): string {
+    return `${this.baseUrl}/search?p=${encodeURIComponent(query)}`;
+  }
 
-    protected async extractResults(page: Page, limit: number): Promise<SearchResult[]> {
-        await page.waitForSelector('.dd.algo', { timeout: 10000 });
+  protected async extractResults(
+    page: Page,
+    limit: number,
+  ): Promise<SearchResult[]> {
+    await page.waitForSelector(".dd.algo", { timeout: 10000 });
 
-        const results = await page.$$eval('.dd.algo', (elements) => {
-            return elements.map(el => ({
-                title: el.querySelector('h3')?.textContent?.trim() || '',
-                url: el.querySelector('a')?.getAttribute('href') || '',
-                description: el.querySelector('.compText')?.textContent?.trim() || '',
-                source: el.querySelector('span.txt')?.textContent?.trim() || '',
-                engine: 'yahoo'
-            })).filter(r => r.url.startsWith('http'));
-        });
+    const results = await page.$$eval(".dd.algo", (elements) => {
+      return elements
+        .map((el) => ({
+          title: el.querySelector("h3")?.textContent?.trim() || "",
+          url: el.querySelector("a")?.getAttribute("href") || "",
+          description: el.querySelector(".compText")?.textContent?.trim() || "",
+          source: el.querySelector("span.txt")?.textContent?.trim() || "",
+          engine: "yahoo",
+        }))
+        .filter((r) => r.url.startsWith("http"));
+    });
 
-        return results.slice(0, limit);
-    }
+    return results.slice(0, limit);
+  }
 }
 
 export const yahooEngine = new YahooEngine();
@@ -665,33 +700,40 @@ export const yahooEngine = new YahooEngine();
 ### Example 2: Ecosia Search
 
 ```typescript
-import { Page } from 'playwright';
-import { BaseEngine } from './BaseEngine.js';
-import { SearchResult } from '../types.js';
+import { Page } from "playwright";
+import { BaseEngine } from "./BaseEngine.js";
+import { SearchResult } from "../types.js";
 
 export class EcosiaEngine extends BaseEngine {
-    readonly name = 'ecosia';
-    readonly baseUrl = 'https://www.ecosia.org';
+  readonly name = "ecosia";
+  readonly baseUrl = "https://www.ecosia.org";
 
-    protected buildSearchUrl(query: string): string {
-        return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
-    }
+  protected buildSearchUrl(query: string): string {
+    return `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
+  }
 
-    protected async extractResults(page: Page, limit: number): Promise<SearchResult[]> {
-        await page.waitForSelector('.result', { timeout: 10000 });
+  protected async extractResults(
+    page: Page,
+    limit: number,
+  ): Promise<SearchResult[]> {
+    await page.waitForSelector(".result", { timeout: 10000 });
 
-        const results = await page.$$eval('.result', (elements) => {
-            return elements.map(el => ({
-                title: el.querySelector('.result-title')?.textContent?.trim() || '',
-                url: el.querySelector('a.result-url')?.getAttribute('href') || '',
-                description: el.querySelector('.result-snippet')?.textContent?.trim() || '',
-                source: el.querySelector('.result-hostname')?.textContent?.trim() || '',
-                engine: 'ecosia'
-            })).filter(r => r.url.startsWith('http'));
-        });
+    const results = await page.$$eval(".result", (elements) => {
+      return elements
+        .map((el) => ({
+          title: el.querySelector(".result-title")?.textContent?.trim() || "",
+          url: el.querySelector("a.result-url")?.getAttribute("href") || "",
+          description:
+            el.querySelector(".result-snippet")?.textContent?.trim() || "",
+          source:
+            el.querySelector(".result-hostname")?.textContent?.trim() || "",
+          engine: "ecosia",
+        }))
+        .filter((r) => r.url.startsWith("http"));
+    });
 
-        return results.slice(0, limit);
-    }
+    return results.slice(0, limit);
+  }
 }
 
 export const ecosiaEngine = new EcosiaEngine();
@@ -700,34 +742,45 @@ export const ecosiaEngine = new EcosiaEngine();
 ### Example 3: Startpage Search
 
 ```typescript
-import { Page } from 'playwright';
-import { BaseEngine } from './BaseEngine.js';
-import { SearchResult } from '../types.js';
+import { Page } from "playwright";
+import { BaseEngine } from "./BaseEngine.js";
+import { SearchResult } from "../types.js";
 
 export class StartpageEngine extends BaseEngine {
-    readonly name = 'startpage';
-    readonly baseUrl = 'https://www.startpage.com';
+  readonly name = "startpage";
+  readonly baseUrl = "https://www.startpage.com";
 
-    protected buildSearchUrl(query: string): string {
-        return `${this.baseUrl}/search?query=${encodeURIComponent(query)}`;
-    }
+  protected buildSearchUrl(query: string): string {
+    return `${this.baseUrl}/search?query=${encodeURIComponent(query)}`;
+  }
 
-    protected async extractResults(page: Page, limit: number): Promise<SearchResult[]> {
-        // Startpage uses dynamic loading
-        await page.waitForSelector('.w-gl__result', { timeout: 15000 });
+  protected async extractResults(
+    page: Page,
+    limit: number,
+  ): Promise<SearchResult[]> {
+    // Startpage uses dynamic loading
+    await page.waitForSelector(".w-gl__result", { timeout: 15000 });
 
-        const results = await page.$$eval('.w-gl__result', (elements) => {
-            return elements.map(el => ({
-                title: el.querySelector('.w-gl__result-title')?.textContent?.trim() || '',
-                url: el.querySelector('a.w-gl__result-url')?.getAttribute('href') || '',
-                description: el.querySelector('.w-gl__description')?.textContent?.trim() || '',
-                source: el.querySelector('.w-gl__result-url-hostname')?.textContent?.trim() || '',
-                engine: 'startpage'
-            })).filter(r => r.url.startsWith('http'));
-        });
+    const results = await page.$$eval(".w-gl__result", (elements) => {
+      return elements
+        .map((el) => ({
+          title:
+            el.querySelector(".w-gl__result-title")?.textContent?.trim() || "",
+          url:
+            el.querySelector("a.w-gl__result-url")?.getAttribute("href") || "",
+          description:
+            el.querySelector(".w-gl__description")?.textContent?.trim() || "",
+          source:
+            el
+              .querySelector(".w-gl__result-url-hostname")
+              ?.textContent?.trim() || "",
+          engine: "startpage",
+        }))
+        .filter((r) => r.url.startsWith("http"));
+    });
 
-        return results.slice(0, limit);
-    }
+    return results.slice(0, limit);
+  }
 }
 
 export const startpageEngine = new StartpageEngine();
@@ -742,6 +795,7 @@ export const startpageEngine = new StartpageEngine();
 **Problem:** Search results aren't loading in time.
 
 **Solutions:**
+
 1. Increase timeout: `{ timeout: 15000 }`
 2. Try different selector
 3. Check if results load dynamically (wait for network idle)
@@ -752,6 +806,7 @@ export const startpageEngine = new StartpageEngine();
 **Problem:** Selector finds elements but no results are returned.
 
 **Solutions:**
+
 1. Check if URLs start with `http` (filter may be removing them)
 2. Verify selectors in browser DevTools
 3. Check if elements have the expected structure
@@ -762,6 +817,7 @@ export const startpageEngine = new StartpageEngine();
 **Problem:** Element selector is not finding the expected element.
 
 **Solutions:**
+
 1. Use optional chaining: `el.querySelector('.title')?.textContent`
 2. Provide fallback: `?.textContent?.trim() || ''`
 3. Check selector in browser console
@@ -772,13 +828,14 @@ export const startpageEngine = new StartpageEngine();
 **Problem:** Type errors in strict mode.
 
 **Solutions:**
+
 ```typescript
 // ✅ Good: Proper types
-import { Page } from 'playwright';
-import { SearchResult } from '../types.js';
+import { Page } from "playwright";
+import { SearchResult } from "../types.js";
 
 // ✅ Good: Optional chaining
-el.querySelector('.title')?.textContent?.trim() || ''
+el.querySelector(".title")?.textContent?.trim() || "";
 
 // ❌ Bad: Using 'any'
 const page: any = await browserPool.getPage();
@@ -789,6 +846,7 @@ const page: any = await browserPool.getPage();
 **Problem:** Tests work but real usage doesn't.
 
 **Solutions:**
+
 1. Check if engine is registered in `setupTools.ts`
 2. Verify Zod schema includes your engine name
 3. Restart MCP inspector after code changes
@@ -799,6 +857,7 @@ const page: any = await browserPool.getPage();
 **Problem:** Performance issues.
 
 **Solutions:**
+
 1. Reduce timeout if possible
 2. Avoid pagination for basic searches
 3. Don't wait for `networkidle` unless necessary
