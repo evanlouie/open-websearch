@@ -20,7 +20,7 @@
     "test:both": "MODE=both bun src/index.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.11.2",
+    "@modelcontextprotocol/sdk": "^1.18.2",
     "axios": "^1.7.9",
     "cheerio": "^1.0.0",
     "https-proxy-agent": "^7.0.6",

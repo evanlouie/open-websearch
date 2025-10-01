@@ -124,6 +124,26 @@ const executeMultiQuerySearch = async (
   });
 };
 
+// Define output schema for search tool
+const SearchResultSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  description: z.string(),
+  source: z.string(),
+  engine: z.string(),
+});
+
+const SearchOutputSchema = {
+  results: z.array(
+    z.object({
+      query: z.string(),
+      engines: z.array(z.string()),
+      totalResults: z.number(),
+      results: z.array(SearchResultSchema),
+    }),
+  ),
+};
+
 export const setupTools = (server: McpServer): void => {
   // Search tool
   // Generate dynamic description for search tool
@@ -158,46 +178,49 @@ export const setupTools = (server: McpServer): void => {
     return z.enum(allowedEngines as [string, ...string[]]);
   };
 
-  server.tool(
+  server.registerTool(
     "search",
-    getSearchDescription(),
     {
-      query: z
-        .array(z.string().min(1, "Search query must not be empty"))
-        .min(1, "At least one query is required")
-        .max(10, "Maximum 10 queries allowed")
-        .describe(
-          'Array of search queries. For single query, use ["query text"]. For multiple queries, use ["query1", "query2", "query3"]. Maximum 10 queries per request.',
-        ),
-      limit: z
-        .number()
-        .min(1)
-        .max(50)
-        .default(10)
-        .describe(
-          "Number type: Maximum number of results to return per query (default: 10, range: 1-50)",
-        ),
-      engines: z
-        .array(getEnginesEnum())
-        .min(1)
-        .default([config.defaultSearchEngine])
-        .describe(
-          `Array of strings: Search engines to use. Example: ["brave", "duckduckgo"]. Default: ["${config.defaultSearchEngine}"]`,
-        )
-        .transform((requestedEngines) => {
-          // If allowed search engines are configured, filter requested engines
-          if (config.allowedSearchEngines.length > 0) {
-            const filteredEngines = requestedEngines.filter((engine) =>
-              config.allowedSearchEngines.includes(engine),
-            );
+      description: getSearchDescription(),
+      inputSchema: {
+        query: z
+          .array(z.string().min(1, "Search query must not be empty"))
+          .min(1, "At least one query is required")
+          .max(10, "Maximum 10 queries allowed")
+          .describe(
+            'Array of search queries. For single query, use ["query text"]. For multiple queries, use ["query1", "query2", "query3"]. Maximum 10 queries per request.',
+          ),
+        limit: z
+          .number()
+          .min(1)
+          .max(50)
+          .default(10)
+          .describe(
+            "Number type: Maximum number of results to return per query (default: 10, range: 1-50)",
+          ),
+        engines: z
+          .array(getEnginesEnum())
+          .min(1)
+          .default([config.defaultSearchEngine])
+          .describe(
+            `Array of strings: Search engines to use. Example: ["brave", "duckduckgo"]. Default: ["${config.defaultSearchEngine}"]`,
+          )
+          .transform((requestedEngines) => {
+            // If allowed search engines are configured, filter requested engines
+            if (config.allowedSearchEngines.length > 0) {
+              const filteredEngines = requestedEngines.filter((engine) =>
+                config.allowedSearchEngines.includes(engine),
+              );
 
-            // If all requested engines are filtered out, use default engine
-            return filteredEngines.length > 0
-              ? filteredEngines
-              : [config.defaultSearchEngine];
-          }
-          return requestedEngines;
-        }),
+              // If all requested engines are filtered out, use default engine
+              return filteredEngines.length > 0
+                ? filteredEngines
+                : [config.defaultSearchEngine];
+            }
+            return requestedEngines;
+          }),
+      },
+      outputSchema: SearchOutputSchema,
     },
     async ({ query, limit = 10, engines = ["bing"] }) => {
       try {
@@ -211,23 +234,12 @@ export const setupTools = (server: McpServer): void => {
           content: [
             {
               type: "text",
-              text: `Completed search for ${query.length} ${query.length === 1 ? "query" : "queries"} using ${engines.join(", ")}`,
-            },
-            {
-              type: "resource",
-              resource: {
-                uri: `search://query/${Date.now()}`,
-                mimeType: "application/json",
-                text: JSON.stringify(
-                  {
-                    results,
-                  },
-                  null,
-                  2,
-                ),
-              },
+              text: JSON.stringify({ results }, null, 2),
             },
           ],
+          structuredContent: {
+            results,
+          },
         };
       } catch (error) {
         console.error("Search tool execution failed:", error);
