@@ -4,7 +4,7 @@ async function testBraveSearch() {
   console.log("🔍 Starting Brave search test...");
 
   try {
-    const query = "websearchmcp";
+    const query = "websearch mcp";
     const maxResults = 30;
 
     console.log(`📝 Search query: ${query}`);

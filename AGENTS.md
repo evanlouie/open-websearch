@@ -57,18 +57,6 @@ bunx open-websearch@latest
 DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx open-websearch@latest
 ```
 
-### Docker
-
-```bash
-# Build and run with Docker Compose
-docker-compose up -d
-
-# Build Docker image manually
-docker build -t open-websearch .
-
-# Run Docker container
-docker run -d --name web-search -p 3000:3000 -e ENABLE_CORS=true ghcr.io/aas-ee/open-web-search:latest
-```
 
 ## Architecture
 

@@ -4,7 +4,7 @@ async function testBingSearch() {
   console.log("🔍 Starting Bing search test...");
 
   try {
-    const query = "websearchmcp";
+    const query = "websearch mcp";
     const maxResults = 10;
 
     console.log(`📝 Search query: ${query}`);
