@@ -287,22 +287,36 @@ use_mcp_tool({
 
 Single query response format:
 
-```json
-{
-  "query": "typescript programming",
-  "engines": ["bing", "duckduckgo"],
-  "totalResults": 10,
-  "results": [
-    {
-      "title": "TypeScript Documentation",
-      "url": "https://www.typescriptlang.org/docs/",
-      "description": "TypeScript is a strongly typed programming language...",
-      "source": "bing",
-      "engine": "bing"
-    }
-  ]
-}
-```
+The tool returns an MCP response with two content items:
+
+1. **Text summary** (human-readable):
+
+   ```
+   Found 10 results for "typescript programming" using bing, duckduckgo
+   ```
+
+2. **JSON resource** (structured data with `mimeType: "application/json"`):
+   ```json
+   {
+     "query": "typescript programming",
+     "engines": ["bing", "duckduckgo"],
+     "totalResults": 10,
+     "results": [
+       {
+         "title": "TypeScript Documentation",
+         "url": "https://www.typescriptlang.org/docs/",
+         "description": "TypeScript is a strongly typed programming language...",
+         "source": "bing",
+         "engine": "bing"
+       }
+     ]
+   }
+   ```
+
+   - URI: `search://query/typescript%20programming/{timestamp}` (e.g., `search://query/typescript%20programming/1609459200000`)
+   - Each execution gets a unique URI to prevent caching issues
+   - MCP-aware clients can detect the JSON structure automatically
+   - Can be surfaced as downloadable attachment or passed to downstream tools
 
 **Multi-Query Example:**
 
@@ -320,54 +334,67 @@ use_mcp_tool({
 
 Multi-query response format:
 
-```json
-{
-  "results": [
-    {
-      "query": "typescript",
-      "engines": ["bing", "duckduckgo"],
-      "totalResults": 10,
-      "results": [
-        {
-          "title": "TypeScript",
-          "url": "https://www.typescriptlang.org/",
-          "description": "TypeScript extends JavaScript...",
-          "source": "bing",
-          "engine": "bing"
-        }
-      ]
-    },
-    {
-      "query": "javascript",
-      "engines": ["bing", "duckduckgo"],
-      "totalResults": 10,
-      "results": [
-        {
-          "title": "JavaScript | MDN",
-          "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
-          "description": "JavaScript (JS) is a lightweight interpreted...",
-          "source": "duckduckgo",
-          "engine": "duckduckgo"
-        }
-      ]
-    },
-    {
-      "query": "rust programming",
-      "engines": ["bing", "duckduckgo"],
-      "totalResults": 10,
-      "results": [
-        {
-          "title": "Rust Programming Language",
-          "url": "https://www.rust-lang.org/",
-          "description": "A language empowering everyone...",
-          "source": "bing",
-          "engine": "bing"
-        }
-      ]
-    }
-  ]
-}
-```
+The tool returns an MCP response with two content items:
+
+1. **Text summary** (human-readable):
+
+   ```
+   Completed search for 3 queries using bing, duckduckgo
+   ```
+
+2. **JSON resource** (structured data with `mimeType: "application/json"`):
+   ```json
+   {
+     "results": [
+       {
+         "query": "typescript",
+         "engines": ["bing", "duckduckgo"],
+         "totalResults": 10,
+         "results": [
+           {
+             "title": "TypeScript",
+             "url": "https://www.typescriptlang.org/",
+             "description": "TypeScript extends JavaScript...",
+             "source": "bing",
+             "engine": "bing"
+           }
+         ]
+       },
+       {
+         "query": "javascript",
+         "engines": ["bing", "duckduckgo"],
+         "totalResults": 10,
+         "results": [
+           {
+             "title": "JavaScript | MDN",
+             "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+             "description": "JavaScript (JS) is a lightweight interpreted...",
+             "source": "duckduckgo",
+             "engine": "duckduckgo"
+           }
+         ]
+       },
+       {
+         "query": "rust programming",
+         "engines": ["bing", "duckduckgo"],
+         "totalResults": 10,
+         "results": [
+           {
+             "title": "Rust Programming Language",
+             "url": "https://www.rust-lang.org/",
+             "description": "A language empowering everyone...",
+             "source": "bing",
+             "engine": "bing"
+           }
+         ]
+       }
+     ]
+   }
+   ```
+
+   - URI: `search://multi-query/{timestamp}` (e.g., `search://multi-query/1609459200000`)
+   - MCP-aware clients can detect the JSON structure automatically
+   - Can be surfaced as downloadable attachment or passed to downstream tools
 
 **Important Notes:**
 

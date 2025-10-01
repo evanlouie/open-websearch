@@ -239,13 +239,21 @@ export const setupTools = (server: McpServer): void => {
             content: [
               {
                 type: "text",
-                text: JSON.stringify(
-                  {
-                    results,
-                  },
-                  null,
-                  2,
-                ),
+                text: `Completed search for ${query.length} ${query.length === 1 ? "query" : "queries"} using ${engines.join(", ")}`,
+              },
+              {
+                type: "resource",
+                resource: {
+                  uri: `search://multi-query/${Date.now()}`,
+                  mimeType: "application/json",
+                  text: JSON.stringify(
+                    {
+                      results,
+                    },
+                    null,
+                    2,
+                  ),
+                },
               },
             ],
           };
@@ -255,21 +263,30 @@ export const setupTools = (server: McpServer): void => {
           );
 
           const results = await executeSearch(query.trim(), engines, limit);
+          const cleanQuery = query.trim();
 
           return {
             content: [
               {
                 type: "text",
-                text: JSON.stringify(
-                  {
-                    query: query.trim(),
-                    engines: engines,
-                    totalResults: results.length,
-                    results: results,
-                  },
-                  null,
-                  2,
-                ),
+                text: `Found ${results.length} result${results.length === 1 ? "" : "s"} for "${cleanQuery}" using ${engines.join(", ")}`,
+              },
+              {
+                type: "resource",
+                resource: {
+                  uri: `search://query/${encodeURIComponent(cleanQuery)}/${Date.now()}`,
+                  mimeType: "application/json",
+                  text: JSON.stringify(
+                    {
+                      query: cleanQuery,
+                      engines: engines,
+                      totalResults: results.length,
+                      results: results,
+                    },
+                    null,
+                    2,
+                  ),
+                },
               },
             ],
           };
