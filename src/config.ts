@@ -14,7 +14,12 @@ import * as Arr from "effect/Array";
  * Array of all supported search engine identifiers.
  * These engines can be used for web searches without requiring API keys.
  */
-export const supportedSearchEngines = ["bing", "duckduckgo", "brave"] as const;
+export const supportedSearchEngines = [
+  "auto",
+  "bing",
+  "duckduckgo",
+  "brave",
+] as const;
 
 /**
  * Union type representing a supported search engine.
@@ -23,7 +28,10 @@ export const supportedSearchEngines = ["bing", "duckduckgo", "brave"] as const;
 export type SupportedEngine = (typeof supportedSearchEngines)[number];
 
 const isSupportedEngine = (engine: string): engine is SupportedEngine =>
-  engine === "bing" || engine === "duckduckgo" || engine === "brave";
+  engine === "auto" ||
+  engine === "bing" ||
+  engine === "duckduckgo" ||
+  engine === "brave";
 
 const SupportedEngineSchema = Schema.Literal(...supportedSearchEngines);
 
@@ -81,7 +89,7 @@ const normalizeDefaultEngine = (
         ? Option.some(engine)
         : Option.none<SupportedEngine>(),
     ),
-    Option.getOrElse((): SupportedEngine => "brave"),
+    Option.getOrElse((): SupportedEngine => "auto"),
   );
 
 const serverModes = ["both", "http", "stdio"] as const;

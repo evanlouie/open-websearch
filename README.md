@@ -19,7 +19,8 @@ A Model Context Protocol (MCP) server based on multi-engine search results, supp
 ## Features
 
 - Web search using multi-engine results
-  - bing ⚠️ _Currently experiencing issues and may not return results_
+  - auto (default fallback: Bing -> Brave -> DuckDuckGo)
+  - bing
   - duckduckgo
   - brave
 - **Multi-query search support** - search multiple queries in a single request (up to 10 queries)
@@ -78,16 +79,16 @@ DEFAULT_SEARCH_ENGINE=duckduckgo ENABLE_CORS=true bunx github:evanlouie/open-web
 
 **Environment Variables:**
 
-| Variable                 | Default                 | Options                       | Description                                                                                                                     |
-| ------------------------ | ----------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `ENABLE_CORS`            | `false`                 | `true`, `false`               | Enable CORS                                                                                                                     |
-| `CORS_ORIGIN`            | `*`                     | Any valid origin              | CORS origin configuration                                                                                                       |
-| `DEFAULT_SEARCH_ENGINE`  | `brave`                 | `bing`, `duckduckgo`, `brave` | Default search engine (Note: Bing currently has issues)                                                                         |
-| `USE_PROXY`              | `false`                 | `true`, `false`               | Enable HTTP proxy                                                                                                               |
-| `PROXY_URL`              | `http://127.0.0.1:7890` | Any valid URL                 | Proxy server URL                                                                                                                |
-| `MODE`                   | `both`                  | `both`, `http`, `stdio`       | Server mode: both HTTP+STDIO, HTTP only, or STDIO only                                                                          |
-| `PORT`                   | `3000`                  | 0-65535                       | Server port (set to 0 for automatic port selection)                                                                             |
-| `ALLOWED_SEARCH_ENGINES` | empty (all available)   | Comma-separated engine names  | Limit which search engines can be used; if the default engine is not in this list, the first allowed engine becomes the default |
+| Variable                 | Default                 | Options                               | Description                                                                                                                     |
+| ------------------------ | ----------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `ENABLE_CORS`            | `false`                 | `true`, `false`                       | Enable CORS                                                                                                                     |
+| `CORS_ORIGIN`            | `*`                     | Any valid origin                      | CORS origin configuration                                                                                                       |
+| `DEFAULT_SEARCH_ENGINE`  | `auto`                  | `auto`, `bing`, `duckduckgo`, `brave` | Default search engine. `auto` tries Bing, then Brave, then DuckDuckGo until one succeeds.                                       |
+| `USE_PROXY`              | `false`                 | `true`, `false`                       | Enable HTTP proxy                                                                                                               |
+| `PROXY_URL`              | `http://127.0.0.1:7890` | Any valid URL                         | Proxy server URL                                                                                                                |
+| `MODE`                   | `both`                  | `both`, `http`, `stdio`               | Server mode: both HTTP+STDIO, HTTP only, or STDIO only                                                                          |
+| `PORT`                   | `3000`                  | 0-65535                               | Server port (set to 0 for automatic port selection)                                                                             |
+| `ALLOWED_SEARCH_ENGINES` | empty (all available)   | Comma-separated engine names          | Limit which search engines can be used; if the default engine is not in this list, the first allowed engine becomes the default |
 
 **Common configurations:**
 
@@ -358,9 +359,9 @@ Since this tool works by scraping multi-engine search results, please note the f
    - Implement appropriate rate limiting based on your actual use case
 
 4. **Search Engine Configuration**:
-   - Default search engine can be set via the `DEFAULT_SEARCH_ENGINE` environment variable
-   - Supported engines: bing (currently has issues), duckduckgo, brave
-   - The default engine is brave
+   - Default search engine can be set via the `DEFAULT_SEARCH_ENGINE` environment variable (defaults to `auto`, which falls back from Bing -> Brave -> DuckDuckGo)
+   - Supported engines: auto (fallback: Bing -> Brave -> DuckDuckGo), bing, duckduckgo, brave
+   - The default engine is auto (uses the fallback sequence above)
    - The default engine is used when searching specific websites
 
 5. **Proxy Configuration**:

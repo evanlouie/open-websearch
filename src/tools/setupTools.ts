@@ -8,6 +8,7 @@ import { SearchEngineError, type SearchResult } from "../types.js";
 import { searchBing } from "../engines/bing.js";
 import { searchDuckDuckGo } from "../engines/duckduckgo.js";
 import { searchBrave } from "../engines/brave.js";
+import { searchAuto } from "../engines/auto.js";
 import {
   AppConfig,
   AppConfigTag,
@@ -26,6 +27,7 @@ const engineMap: Record<
     limit: number,
   ) => Effect.Effect<SearchResult[], SearchEngineError, AppConfig>
 > = {
+  auto: searchAuto,
   bing: searchBing,
   duckduckgo: searchDuckDuckGo,
   brave: searchBrave,
@@ -211,31 +213,22 @@ const toEngineEnum = (engines: SupportedEngine[]) =>
   z.enum(engines as [SupportedEngine, ...SupportedEngine[]]);
 
 const buildSearchDescription = (config: AppConfig): string => {
-  const bingWarning =
-    "⚠️ WARNING: Bing is currently experiencing issues and may not return results. Recommended engines: Brave or DuckDuckGo. ";
   const engines = resolveAllowedEngines(config);
 
+  const formatEngineName = (engine: SupportedEngine) =>
+    engine === "auto"
+      ? "Auto (fallback: Bing -> Brave -> DuckDuckGo)"
+      : engine.charAt(0).toUpperCase() + engine.slice(1);
+
   if (!Arr.isNonEmptyReadonlyArray(config.allowedSearchEngines)) {
-    return (
-      bingWarning +
-      "Search the web using Bing, Brave, or DuckDuckGo. Supports single or multiple queries (max 10). No API key required."
-    );
+    return "Search the web using Auto (fallback: Bing -> Brave -> DuckDuckGo), Bing, Brave, or DuckDuckGo. Supports single or multiple queries (max 10). No API key required.";
   }
 
-  const enginesText = pipe(
-    engines,
-    Arr.map((engine) => engine.charAt(0).toUpperCase() + engine.slice(1)),
-    (values) => values.join(", "),
-  );
-  const hasBing = pipe(
-    engines,
-    Arr.some((engine) => engine === "bing"),
+  const enginesText = pipe(engines, Arr.map(formatEngineName), (values) =>
+    values.join(", "),
   );
 
-  return (
-    (hasBing ? bingWarning : "") +
-    `Search the web using these engines: ${enginesText}. Supports single or multiple queries (max 10). No API key required.`
-  );
+  return `Search the web using these engines: ${enginesText}. Supports single or multiple queries (max 10). No API key required.`;
 };
 
 /**

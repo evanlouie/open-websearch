@@ -1,6 +1,6 @@
 import { describe, test, expect } from "bun:test";
 import { Effect } from "effect";
-import { AppConfigLayer } from "../config.js";
+import { AppConfigLayer, getConfig } from "../config.js";
 
 describe("Multi-Query Search Tests", () => {
   test("Server starts successfully with multi-query support", async () => {
@@ -12,6 +12,14 @@ describe("Multi-Query Search Tests", () => {
     );
 
     expect(server).toBeDefined();
+  });
+
+  test("Default search engine resolves to auto", async () => {
+    const config = await Effect.runPromise(
+      getConfig.pipe(Effect.provide(AppConfigLayer)),
+    );
+
+    expect(config.defaultSearchEngine).toBe("auto");
   });
 
   test("Multi-query tool description includes multiple queries support", async () => {

@@ -88,7 +88,7 @@ The server supports three operational modes via the `MODE` environment variable:
 
 Key configuration variables:
 
-- `DEFAULT_SEARCH_ENGINE`: Default engine (bing, duckduckgo, brave)
+- `DEFAULT_SEARCH_ENGINE`: Default engine (`auto`, `bing`, `duckduckgo`, `brave`). `auto` sequentially falls back from Bing -> Brave -> DuckDuckGo when a search fails.
 - `ALLOWED_SEARCH_ENGINES`: Comma-separated list to restrict available engines
 - `USE_PROXY`: Enable HTTP proxy
 - `PROXY_URL`: Proxy server URL
@@ -173,7 +173,7 @@ When HTTP mode is enabled:
 
 ## Testing
 
-The project has **106 tests** with comprehensive coverage of both unit and integration scenarios.
+The project has **111 tests** with comprehensive coverage of both unit and integration scenarios.
 
 ### Test Organization
 
@@ -182,19 +182,20 @@ The project has **106 tests** with comprehensive coverage of both unit and integ
 - `*.test.ts` - Unit tests for pure functions (no network/IO/servers)
 - `*.integration.test.ts` - Integration tests (HTTP servers, network calls, external systems)
 
-**Test Coverage (106 tests total):**
+**Test Coverage (111 tests total):**
 
-**Unit Tests (83 tests):**
+**Unit Tests (87 tests):**
 
 - `src/engines/bing.test.ts` - 10 tests for parseResultElement
 - `src/engines/brave.test.ts` - 13 tests for parseResultElement and createRequestOptions
 - `src/engines/duckduckgo.test.ts` - 39 tests for 8 helper functions (extractPreloadUrl, parseJsonData, etc.)
 - `src/server.unit.test.ts` - 21 tests for server helper functions (getHeaderValue, transport lookups, etc.)
+- `src/engines/auto.test.ts` - 4 tests covering fallback scenarios across Bing, Brave, and DuckDuckGo
 
-**Integration Tests (23 tests):**
+**Integration Tests (24 tests):**
 
 - `src/server.integration.test.ts` - HTTP server endpoints, CORS, sessions, error handling
-- `src/tools/setupTools.integration.test.ts` - MCP server creation, multi-query functionality
+- `src/tools/setupTools.integration.test.ts` - MCP server creation, multi-query functionality, default engine validation
 
 Pure functions are exported from source files for unit testing.
 
